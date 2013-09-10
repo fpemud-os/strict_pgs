@@ -1,10 +1,5 @@
 #!/usr/bin/env python
 
-# Set True to force compile native C-coded extension providing direct access
-# to inotify's syscalls. If set to False this extension will only be compiled
-# if no inotify interface from ctypes is found.
-compile_ext_mod = False
-
 # import statements
 import os
 import sys
@@ -68,7 +63,6 @@ setup(
     classifiers=classif,
     url='http://github.com/fpemud/strict_pgs',
     download_url='',
-    ext_modules=ext_mod,
     py_modules=['strict_pgs'],
     package_dir=package_dir,
     )
