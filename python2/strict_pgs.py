@@ -28,6 +28,10 @@ strict_pgs
 @contact: fpemud@sina.com
 """
 
+import os
+import pwd
+import grp
+
 
 __author__ = "fpemud@sina.com (Fpemud)"
 
