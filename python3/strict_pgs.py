@@ -165,7 +165,6 @@ class PasswdGroupShadow:
 
 			t = line.split(":")
 			if len(t) != 7:
-				print "debug:" + line
 				raise PgsFormatError("Invalid format of passwd file")
 
 			if part == "system":
