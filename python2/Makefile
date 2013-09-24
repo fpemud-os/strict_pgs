@@ -2,7 +2,7 @@ EPYDOC=epydoc
 DSTDOC=docstrings
 
 doc: clean-doc
-	$(EPYDOC) --html --graph=all -v -o $(DSTDOC) strict_ugs.py
+	$(EPYDOC) --html --graph=all -v -o $(DSTDOC) strict_pgs.py
 
 clean-doc:
 	rm -rf $(DSTDOC)
