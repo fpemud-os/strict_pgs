@@ -41,7 +41,10 @@ __version__ = "0.0.1"
 class PgsFormatError(Exception):
 	pass
 
-class PgsUserAddError(Exception):
+class PgsAddUserError(Exception):
+	pass
+
+class PgsRemoveUserError(Exception):
 	pass
 
 class PasswdGroupShadow:
@@ -102,9 +105,9 @@ class PasswdGroupShadow:
 
 		# check argument
 		if pwd.getpwnam(username) is not None:
-			raise PgsUserAddError("Duplicate user")
+			raise PgsAddUserError("Duplicate user")
 		if grp.getgrnam(username) is not None:
-			raise PgsUserAddError("Duplicate group of user")
+			raise PgsAddUserError("Duplicate group of user")
 
 		# read files
 		bufPasswd = self._readFile(self.passwdFile)
@@ -132,7 +135,7 @@ class PasswdGroupShadow:
 					continue
 
 				if line.startswith("#"):
-					raise PgsUserAddError("Invalid format of passwd file")
+					raise PgsAddUserError("Invalid format of passwd file")
 
 				if line != "":
 					lastLine = line
@@ -142,14 +145,14 @@ class PasswdGroupShadow:
 					break
 
 			if parseSate != 1:
-				raise PgsUserAddError("Invalid format of passwd file")
+				raise PgsAddUserError("Invalid format of passwd file")
 
 			# get new user id
 			newUid = 1000
 			if lastLine != "":
 				newUid = int(lastLine.split(":")[2]) + 1
 			if newUid > 10000:
-				raise PgsUserAddError("Invalid new user id")
+				raise PgsAddUserError("Invalid new user id")
 				
 			# insert new user
 			newUserLine = "%s:x:%d:%d::/home/%s:/bin/bash"%(username, newUid, newUid, username)
@@ -173,7 +176,7 @@ class PasswdGroupShadow:
 					continue
 
 				if line.startswith("#"):
-					raise PgsUserAddError("Invalid format of group file")
+					raise PgsAddUserError("Invalid format of group file")
 
 				if line != "":
 					lastLine = line
@@ -183,14 +186,14 @@ class PasswdGroupShadow:
 					break
 
 			if parseSate != 1:
-				raise PgsUserAddError("Invalid format of group file")
+				raise PgsAddUserError("Invalid format of group file")
 
 			# get new group id
 			newGid = 1000
 			if lastLine != "":
 				newGid = int(lastLine.split(":")[2]) + 1
 			if newGid != newUid:
-				raise PgsUserAddError("Invalid new group id")
+				raise PgsAddUserError("Invalid new group id")
 				
 			# insert new group
 			newGroupLine = "%s:x:%d:"%(username, newGid)
@@ -219,9 +222,9 @@ class PasswdGroupShadow:
 
 		# check argument
 		if pwd.getpwnam(username) is None:
-			raise PgsUserAddError("User not found")
+			raise PgsRemoveUserError("User not found")
 		if grp.getgrnam(username) is None:
-			raise PgsUserAddError("Group of user not found")
+			raise PgsRemoveUserError("Group of user not found")
 
 		# read files
 		bufPasswd = self._readFile(self.passwdFile)
@@ -244,14 +247,14 @@ class PasswdGroupShadow:
 					continue
 
 				if line == "" or line.startswith("#"):
-					raise PgsUserAddError("Invalid format of passwd file")
+					raise PgsRemoveUserError("Invalid format of passwd file")
 
 				if line.split("\n")[0] == username:
 					parseState = 2
 					break
 
 			if parseSate != 2:
-				raise PgsUserAddError("Invalid format of passwd file")
+				raise PgsRemoveUserError("Invalid format of passwd file")
 
 			lineList.pop(i)
 			bufPasswd = "\n".join(lineList)]
@@ -271,14 +274,14 @@ class PasswdGroupShadow:
 					continue
 
 				if line == "" or line.startswith("#"):
-					raise PgsUserAddError("Invalid format of group file")
+					raise PgsRemoveUserError("Invalid format of group file")
 
 				if line.split("\n")[0] == username:
 					parseState = 2
 					break
 
 			if parseSate != 2:
-				raise PgsUserAddError("Invalid format of group file")
+				raise PgsRemoveUserError("Invalid format of group file")
 
 			lineList.pop(i)
 			bufGroup = "\n".join(lineList)]
@@ -292,9 +295,8 @@ class PasswdGroupShadow:
 				if line.split("\n")[0] == username:
 					found = True
 					break
-					
 			if not found:
-				raise PgsUserAddError("Invalid format of shadow file")
+				raise PgsRemoveUserError("Invalid format of shadow file")
 
 			lineList.pop(i)
 			bufShadow = "\n".join(lineList)]
@@ -308,9 +310,8 @@ class PasswdGroupShadow:
 				if line.split("\n")[0] == username:
 					found = True
 					break
-					
 			if not found:
-				raise PgsUserAddError("Invalid format of gshadow file")
+				raise PgsRemoveUserError("Invalid format of gshadow file")
 
 			lineList.pop(i)
 			bufGshadow = "\n".join(lineList)]
