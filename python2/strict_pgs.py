@@ -77,16 +77,28 @@ class PasswdGroupShadow:
 		self._parse()
 
 	def getSystemUserList(self):
+		"""returns user name list"""
+
 		return self.systemUserList
 
 	def getNormalUserList(self):
+		"""returns user name list"""
+
 		return self.normalUserList
 
 	def getSecondaryGroupsOfUser(self, username):
+		"""returns group name list"""
+
 		if username in self.secondaryGroupsDict:
 			return self.secondaryGroupsDict[username]
 		else:
 			return []
+
+	def addNormalUser(self, username, password=None):
+		assert password is None
+
+	def removeNormalUser(self, username):
+		pass
 
 	def _parse(self):
 		# parse
