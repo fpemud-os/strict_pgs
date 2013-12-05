@@ -41,6 +41,9 @@ __version__ = "0.0.1"
 class PgsFormatError(Exception):
 	pass
 
+class PgsUserAddError(Exception):
+	pass
+
 class PasswdGroupShadow:
 	"""A passwd/group/shadow file with special format and rules"""
 
@@ -97,8 +100,226 @@ class PasswdGroupShadow:
 	def addNormalUser(self, username, password=None):
 		assert password is None
 
+		# check argument
+		if pwd.getpwnam(username) is not None:
+			raise PgsUserAddError("Duplicate user")
+		if grp.getgrnam(username) is not None:
+			raise PgsUserAddError("Duplicate group of user")
+
+		# read files
+		bufPasswd = self._readFile(self.passwdFile)
+		bufGroup = self._readFile(self.groupFile)
+		bufShadow = self._readFile(self.shadowFile)
+		bufGshadow = self._readFile(self.gshadowFile)
+
+		newUid = -1
+		newGid = -1
+
+		# modify bufPasswd
+		if True:
+			# get new user position
+			lineList = bufPasswd.split("\n")
+			parseState = 0
+			lastLine = ""
+			for i in range(0, len(lineList)):
+				line = lineList[i]
+			
+				if line == "# Normal users":
+					parseState = 1
+					continue
+
+				if parseState == 0:
+					continue
+
+				if line.startswith("#"):
+					raise PgsUserAddError("Invalid format of passwd file")
+
+				if line != "":
+					lastLine = line
+					continue
+
+				if line == "":
+					break
+
+			if parseSate != 1:
+				raise PgsUserAddError("Invalid format of passwd file")
+
+			# get new user id
+			newUid = 1000
+			if lastLine != "":
+				newUid = int(lastLine.split(":")[2]) + 1
+			if newUid > 10000:
+				raise PgsUserAddError("Invalid new user id")
+				
+			# insert new user
+			newUserLine = "%s:x:%d:%d::/home/%s:/bin/bash"%(username, newUid, newUid, username)
+			lineList.insert(i, newUserLine)
+			bufPasswd = "\n".join(lineList)
+
+		# modify bufGroup
+		if True:
+			# get new group position
+			lineList = bufGroup.split("\n")
+			parseState = 0
+			lastLine = ""
+			for i in range(0, len(lineList)):
+				line = lineList[i]
+			
+				if line == "# Normal groups":
+					parseState = 1
+					continue
+
+				if parseState == 0:
+					continue
+
+				if line.startswith("#"):
+					raise PgsUserAddError("Invalid format of group file")
+
+				if line != "":
+					lastLine = line
+					continue
+
+				if line == "":
+					break
+
+			if parseSate != 1:
+				raise PgsUserAddError("Invalid format of group file")
+
+			# get new group id
+			newGid = 1000
+			if lastLine != "":
+				newGid = int(lastLine.split(":")[2]) + 1
+			if newGid != newUid:
+				raise PgsUserAddError("Invalid new group id")
+				
+			# insert new group
+			newGroupLine = "%s:x:%d:"%(username, newGid)
+			lineList.insert(i, newGroupLine)
+			bufGroup = "\n".join(lineList)
+
+		# modify bufShadow
+		if True:
+			if not bufShadow.endswith("\n"):
+				bufShadow += "\n"
+			bufShadow += "%s:x:15929:0:99999:7:::\n"%(username)
+
+		# modify bufGshadow
+		if True:
+			if not bufGshadow.endswith("\n"):
+				bufGshadow += "\n"
+			bufGshadow += "%s:!::\n"%(username)
+
+		# write files
+		self._writeFile(self.passwdFile, bufPasswd)
+		self._writeFile(self.groupFile, bufGroup)
+		self._writeFile(self.shadowFile, bufShadow)
+		self._writeFile(self.gshadowFile, bufGshadow)
+
 	def removeNormalUser(self, username):
-		pass
+
+		# check argument
+		if pwd.getpwnam(username) is None:
+			raise PgsUserAddError("User not found")
+		if grp.getgrnam(username) is None:
+			raise PgsUserAddError("Group of user not found")
+
+		# read files
+		bufPasswd = self._readFile(self.passwdFile)
+		bufGroup = self._readFile(self.groupFile)
+		bufShadow = self._readFile(self.shadowFile)
+		bufGshadow = self._readFile(self.gshadowFile)
+
+		# modify bufPasswd
+		if True:
+			lineList = bufPasswd.split("\n")
+			parseState = 0
+			for i in range(0, len(lineList)):
+				line = lineList[i]
+			
+				if line == "# Normal users":
+					parseState = 1
+					continue
+
+				if parseState == 0:
+					continue
+
+				if line == "" or line.startswith("#"):
+					raise PgsUserAddError("Invalid format of passwd file")
+
+				if line.split("\n")[0] == username:
+					parseState = 2
+					break
+
+			if parseSate != 2:
+				raise PgsUserAddError("Invalid format of passwd file")
+
+			lineList.pop(i)
+			bufPasswd = "\n".join(lineList)]
+			
+		# modify bufGroup
+		if True:
+			lineList = bufGroup.split("\n")
+			parseState = 0
+			for i in range(0, len(lineList)):
+				line = lineList[i]
+			
+				if line == "# Normal groups":
+					parseState = 1
+					continue
+
+				if parseState == 0:
+					continue
+
+				if line == "" or line.startswith("#"):
+					raise PgsUserAddError("Invalid format of group file")
+
+				if line.split("\n")[0] == username:
+					parseState = 2
+					break
+
+			if parseSate != 2:
+				raise PgsUserAddError("Invalid format of group file")
+
+			lineList.pop(i)
+			bufGroup = "\n".join(lineList)]
+			
+		# modify bufShadow
+		if True:
+			lineList = bufShadow.split("\n")
+			found = False
+			for i in range(0, len(lineList)):
+				line = lineList[i]
+				if line.split("\n")[0] == username:
+					found = True
+					break
+					
+			if not found:
+				raise PgsUserAddError("Invalid format of shadow file")
+
+			lineList.pop(i)
+			bufShadow = "\n".join(lineList)]
+
+		# modify bufGshadow
+		if True:
+			lineList = bufGshadow.split("\n")
+			found = False
+			for i in range(0, len(lineList)):
+				line = lineList[i]
+				if line.split("\n")[0] == username:
+					found = True
+					break
+					
+			if not found:
+				raise PgsUserAddError("Invalid format of gshadow file")
+
+			lineList.pop(i)
+			bufGshadow = "\n".join(lineList)]
+
+		# write files
+		self._writeFile(self.passwdFile, bufPasswd)
+		self._writeFile(self.groupFile, bufGroup)
+		self._writeFile(self.shadowFile, bufShadow)
+		self._writeFile(self.gshadowFile, bufGshadow)
 
 	def _parse(self):
 		# parse
@@ -254,10 +475,18 @@ class PasswdGroupShadow:
 			self.shadowDict[t[0]] = self._ShadowEntry(t[1])
 
 	def _readFile(self, filename):
-		"""Read file, returns the whold content"""
+		"""Read file, returns the whole content"""
 
 		f = open(filename, 'r')
 		buf = f.read()
 		f.close()
 		return buf
+
+	def _writeFile(self, filename, buf):
+		"""Write buffer to file"""
+
+		f = open(filename, 'w')
+		f.write(buf)
+		f.close()
+
 
