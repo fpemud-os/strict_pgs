@@ -144,7 +144,7 @@ class PasswdGroupShadow:
 				if line == "":
 					break
 
-			if parseSate != 1:
+			if parseState != 1:
 				raise PgsAddUserError("Invalid format of passwd file")
 
 			# get new user id
@@ -153,7 +153,7 @@ class PasswdGroupShadow:
 				newUid = int(lastLine.split(":")[2]) + 1
 			if newUid > 10000:
 				raise PgsAddUserError("Invalid new user id")
-				
+
 			# insert new user
 			newUserLine = "%s:x:%d:%d::/home/%s:/bin/bash"%(username, newUid, newUid, username)
 			lineList.insert(i, newUserLine)
@@ -185,7 +185,7 @@ class PasswdGroupShadow:
 				if line == "":
 					break
 
-			if parseSate != 1:
+			if parseState != 1:
 				raise PgsAddUserError("Invalid format of group file")
 
 			# get new group id
@@ -253,12 +253,12 @@ class PasswdGroupShadow:
 					parseState = 2
 					break
 
-			if parseSate != 2:
+			if parseState != 2:
 				raise PgsRemoveUserError("Invalid format of passwd file")
 
 			lineList.pop(i)
-			bufPasswd = "\n".join(lineList)]
-			
+			bufPasswd = "\n".join(lineList)
+
 		# modify bufGroup
 		if True:
 			lineList = bufGroup.split("\n")
@@ -280,11 +280,11 @@ class PasswdGroupShadow:
 					parseState = 2
 					break
 
-			if parseSate != 2:
+			if parseState != 2:
 				raise PgsRemoveUserError("Invalid format of group file")
 
 			lineList.pop(i)
-			bufGroup = "\n".join(lineList)]
+			bufGroup = "\n".join(lineList)
 			
 		# modify bufShadow
 		if True:
@@ -299,7 +299,7 @@ class PasswdGroupShadow:
 				raise PgsRemoveUserError("Invalid format of shadow file")
 
 			lineList.pop(i)
-			bufShadow = "\n".join(lineList)]
+			bufShadow = "\n".join(lineList)
 
 		# modify bufGshadow
 		if True:
@@ -314,7 +314,7 @@ class PasswdGroupShadow:
 				raise PgsRemoveUserError("Invalid format of gshadow file")
 
 			lineList.pop(i)
-			bufGshadow = "\n".join(lineList)]
+			bufGshadow = "\n".join(lineList)
 
 		# write files
 		self._writeFile(self.passwdFile, bufPasswd)
