@@ -33,6 +33,9 @@ __author__ = "fpemud@sina.com (Fpemud)"
 
 __version__ = "0.0.1"
 
+import os
+import pwd
+import grp
 
 class PgsFormatError(Exception):
 	pass
@@ -124,7 +127,7 @@ class PasswdGroupShadow:
 				raise PgsFormatError("Should not have shadow entry for software user %s"%(uname))
 
 		# check system group list
-		if self.systemGroupList != [ "root", "nogroup", "users", "games" ]:
+		if self.systemGroupList != [ "root", "nogroup", "wheel", "users", "games" ]:
 			raise PgsFormatError("Invalid system group list")
 
 		# check normal group list
