@@ -28,6 +28,10 @@ strict_pgs
 @contact: fpemud@sina.com
 """
 
+import os
+import pwd
+import grp
+
 
 __author__ = "fpemud@sina.com (Fpemud)"
 
@@ -38,6 +42,12 @@ import pwd
 import grp
 
 class PgsFormatError(Exception):
+	pass
+
+class PgsAddUserError(Exception):
+	pass
+
+class PgsRemoveUserError(Exception):
 	pass
 
 class PasswdGroupShadow:
@@ -76,16 +86,244 @@ class PasswdGroupShadow:
 		self._parse()
 
 	def getSystemUserList(self):
+		"""returns user name list"""
+
 		return self.systemUserList
 
 	def getNormalUserList(self):
+		"""returns user name list"""
+
 		return self.normalUserList
 
 	def getSecondaryGroupsOfUser(self, username):
+		"""returns group name list"""
+
 		if username in self.secondaryGroupsDict:
 			return self.secondaryGroupsDict[username]
 		else:
 			return []
+
+	def addNormalUser(self, username, password=None):
+		assert password is None
+
+		# check argument
+		if pwd.getpwnam(username) is not None:
+			raise PgsAddUserError("Duplicate user")
+		if grp.getgrnam(username) is not None:
+			raise PgsAddUserError("Duplicate group of user")
+
+		# read files
+		bufPasswd = self._readFile(self.passwdFile)
+		bufGroup = self._readFile(self.groupFile)
+		bufShadow = self._readFile(self.shadowFile)
+		bufGshadow = self._readFile(self.gshadowFile)
+
+		newUid = -1
+		newGid = -1
+
+		# modify bufPasswd
+		if True:
+			# get new user position
+			lineList = bufPasswd.split("\n")
+			parseState = 0
+			lastLine = ""
+			for i in range(0, len(lineList)):
+				line = lineList[i]
+			
+				if line == "# Normal users":
+					parseState = 1
+					continue
+
+				if parseState == 0:
+					continue
+
+				if line.startswith("#"):
+					raise PgsAddUserError("Invalid format of passwd file")
+
+				if line != "":
+					lastLine = line
+					continue
+
+				if line == "":
+					break
+
+			if parseState != 1:
+				raise PgsAddUserError("Invalid format of passwd file")
+
+			# get new user id
+			newUid = 1000
+			if lastLine != "":
+				newUid = int(lastLine.split(":")[2]) + 1
+			if newUid > 10000:
+				raise PgsAddUserError("Invalid new user id")
+
+			# insert new user
+			newUserLine = "%s:x:%d:%d::/home/%s:/bin/bash"%(username, newUid, newUid, username)
+			lineList.insert(i, newUserLine)
+			bufPasswd = "\n".join(lineList)
+
+		# modify bufGroup
+		if True:
+			# get new group position
+			lineList = bufGroup.split("\n")
+			parseState = 0
+			lastLine = ""
+			for i in range(0, len(lineList)):
+				line = lineList[i]
+			
+				if line == "# Normal groups":
+					parseState = 1
+					continue
+
+				if parseState == 0:
+					continue
+
+				if line.startswith("#"):
+					raise PgsAddUserError("Invalid format of group file")
+
+				if line != "":
+					lastLine = line
+					continue
+
+				if line == "":
+					break
+
+			if parseState != 1:
+				raise PgsAddUserError("Invalid format of group file")
+
+			# get new group id
+			newGid = 1000
+			if lastLine != "":
+				newGid = int(lastLine.split(":")[2]) + 1
+			if newGid != newUid:
+				raise PgsAddUserError("Invalid new group id")
+				
+			# insert new group
+			newGroupLine = "%s:x:%d:"%(username, newGid)
+			lineList.insert(i, newGroupLine)
+			bufGroup = "\n".join(lineList)
+
+		# modify bufShadow
+		if True:
+			if not bufShadow.endswith("\n"):
+				bufShadow += "\n"
+			bufShadow += "%s:x:15929:0:99999:7:::\n"%(username)
+
+		# modify bufGshadow
+		if True:
+			if not bufGshadow.endswith("\n"):
+				bufGshadow += "\n"
+			bufGshadow += "%s:!::\n"%(username)
+
+		# write files
+		self._writeFile(self.passwdFile, bufPasswd)
+		self._writeFile(self.groupFile, bufGroup)
+		self._writeFile(self.shadowFile, bufShadow)
+		self._writeFile(self.gshadowFile, bufGshadow)
+
+	def removeNormalUser(self, username):
+
+		# check argument
+		if pwd.getpwnam(username) is None:
+			raise PgsRemoveUserError("User not found")
+		if grp.getgrnam(username) is None:
+			raise PgsRemoveUserError("Group of user not found")
+
+		# read files
+		bufPasswd = self._readFile(self.passwdFile)
+		bufGroup = self._readFile(self.groupFile)
+		bufShadow = self._readFile(self.shadowFile)
+		bufGshadow = self._readFile(self.gshadowFile)
+
+		# modify bufPasswd
+		if True:
+			lineList = bufPasswd.split("\n")
+			parseState = 0
+			for i in range(0, len(lineList)):
+				line = lineList[i]
+			
+				if line == "# Normal users":
+					parseState = 1
+					continue
+
+				if parseState == 0:
+					continue
+
+				if line == "" or line.startswith("#"):
+					raise PgsRemoveUserError("Invalid format of passwd file")
+
+				if line.split("\n")[0] == username:
+					parseState = 2
+					break
+
+			if parseState != 2:
+				raise PgsRemoveUserError("Invalid format of passwd file")
+
+			lineList.pop(i)
+			bufPasswd = "\n".join(lineList)
+
+		# modify bufGroup
+		if True:
+			lineList = bufGroup.split("\n")
+			parseState = 0
+			for i in range(0, len(lineList)):
+				line = lineList[i]
+			
+				if line == "# Normal groups":
+					parseState = 1
+					continue
+
+				if parseState == 0:
+					continue
+
+				if line == "" or line.startswith("#"):
+					raise PgsRemoveUserError("Invalid format of group file")
+
+				if line.split("\n")[0] == username:
+					parseState = 2
+					break
+
+			if parseState != 2:
+				raise PgsRemoveUserError("Invalid format of group file")
+
+			lineList.pop(i)
+			bufGroup = "\n".join(lineList)
+			
+		# modify bufShadow
+		if True:
+			lineList = bufShadow.split("\n")
+			found = False
+			for i in range(0, len(lineList)):
+				line = lineList[i]
+				if line.split("\n")[0] == username:
+					found = True
+					break
+			if not found:
+				raise PgsRemoveUserError("Invalid format of shadow file")
+
+			lineList.pop(i)
+			bufShadow = "\n".join(lineList)
+
+		# modify bufGshadow
+		if True:
+			lineList = bufGshadow.split("\n")
+			found = False
+			for i in range(0, len(lineList)):
+				line = lineList[i]
+				if line.split("\n")[0] == username:
+					found = True
+					break
+			if not found:
+				raise PgsRemoveUserError("Invalid format of gshadow file")
+
+			lineList.pop(i)
+			bufGshadow = "\n".join(lineList)
+
+		# write files
+		self._writeFile(self.passwdFile, bufPasswd)
+		self._writeFile(self.groupFile, bufGroup)
+		self._writeFile(self.shadowFile, bufShadow)
+		self._writeFile(self.gshadowFile, bufGshadow)
 
 	def _parse(self):
 		# parse
@@ -102,6 +340,7 @@ class PasswdGroupShadow:
 
 		# check normal user list
 		if self.normalUserList != self.groupForNormalUserList:
+
 			raise PgsFormatError("Invalid normal user list")
 		for uname in self.normalUserList:
 			if pwd.getpwnam(uname).pw_uid not in range(1000, 10000):
@@ -241,10 +480,18 @@ class PasswdGroupShadow:
 			self.shadowDict[t[0]] = self._ShadowEntry(t[1])
 
 	def _readFile(self, filename):
-		"""Read file, returns the whold content"""
+		"""Read file, returns the whole content"""
 
 		f = open(filename, 'r')
 		buf = f.read()
 		f.close()
 		return buf
+
+	def _writeFile(self, filename, buf):
+		"""Write buffer to file"""
+
+		f = open(filename, 'w')
+		f.write(buf)
+		f.close()
+
 
