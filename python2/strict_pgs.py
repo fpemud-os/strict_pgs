@@ -340,7 +340,6 @@ class PasswdGroupShadow:
 
 		# check normal user list
 		if self.normalUserList != self.groupForNormalUserList:
-
 			raise PgsFormatError("Invalid normal user list")
 		for uname in self.normalUserList:
 			if pwd.getpwnam(uname).pw_uid not in range(1000, 10000):
