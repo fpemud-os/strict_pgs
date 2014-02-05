@@ -85,6 +85,11 @@ class PasswdGroupShadow:
 		# do parsing
 		self._parse()
 
+	def getUserList(self):
+		"""returns user name list"""
+		
+		return self.systemUserList + self.normalUserList
+
 	def getSystemUserList(self):
 		"""returns user name list"""
 
