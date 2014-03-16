@@ -57,7 +57,7 @@ class PasswdGroupShadow:
 		def __init__(self, pwd):
 			self.sh_pwd = pwd
 
-	def __init__(self, dirPrefix):
+	def __init__(self, dirPrefix="/"):
 		self.dirPrefix = dirPrefix
 		self.passwdFile = os.path.join(dirPrefix, "etc", "passwd")
 		self.groupFile = os.path.join(dirPrefix, "etc", "group")
@@ -68,7 +68,7 @@ class PasswdGroupShadow:
 		self.systemUserList = []
 		self.groupForSystemUserList = []
 		self.normalUserList = []
-		self.groupForNormalUserList = []
+		self.perUserGroupList = []
 		self.softwareUserList = []
 		self.groupForSoftwareUserList = []
 
@@ -85,20 +85,30 @@ class PasswdGroupShadow:
 		# do parsing
 		self._parse()
 
-	def getUserList(self):
-		"""returns user name list"""
-		
-		return self.systemUserList + self.normalUserList
-
 	def getSystemUserList(self):
-		"""returns user name list"""
-
+		"""returns system user name list"""
 		return self.systemUserList
 
 	def getNormalUserList(self):
-		"""returns user name list"""
-
+		"""returns normal user name list"""
 		return self.normalUserList
+
+	def getSystemGroupList(self):
+		"""returns system group name list"""
+		return self.systemGroupList
+
+	def getPerUserGroupList(self):
+		"""returns per-user group name list"""
+		return self.perUserGroupList
+
+	def getNormalGroupList(self):
+		"""returns normal group name list"""
+		ret = []
+		for gname in self.normalGroupList:
+			if gname in self.perUserGroupList:
+				continue
+			ret.append(gname)
+		return ret
 
 	def getSecondaryGroupsOfUser(self, username):
 		"""returns group name list"""
@@ -108,14 +118,17 @@ class PasswdGroupShadow:
 		else:
 			return []
 
-	def addNormalUser(self, username, password=None):
-		assert password is None
-
-		# check argument
-		if pwd.getpwnam(username) is not None:
-			raise PgsAddUserError("Duplicate user")
-		if grp.getgrnam(username) is not None:
-			raise PgsAddUserError("Duplicate group of user")
+	def addNormalUser(self, username, password):
+		try:
+			pwd.getpwnam(username)
+			assert False
+		except:
+			pass
+		try:
+			pwd.getgrnam(username)
+			assert False
+		except:
+			pass
 
 		# read files
 		bufPasswd = self._readFile(self.passwdFile)
@@ -227,12 +240,8 @@ class PasswdGroupShadow:
 		self._writeFile(self.gshadowFile, bufGshadow)
 
 	def removeNormalUser(self, username):
-
-		# check argument
-		if pwd.getpwnam(username) is None:
-			raise PgsRemoveUserError("User not found")
-		if grp.getgrnam(username) is None:
-			raise PgsRemoveUserError("Group of user not found")
+		"""do nothing if the user doesn't exists
+		   can remove half-created user"""
 
 		# read files
 		bufPasswd = self._readFile(self.passwdFile)
@@ -246,26 +255,21 @@ class PasswdGroupShadow:
 			parseState = 0
 			for i in range(0, len(lineList)):
 				line = lineList[i]
-			
 				if line == "# Normal users":
 					parseState = 1
 					continue
-
 				if parseState == 0:
 					continue
-
 				if line == "" or line.startswith("#"):
-					raise PgsRemoveUserError("Invalid format of passwd file")
-
-				if line.split("\n")[0] == username:
+					break
+				if line.split(":")[0] == username:
 					parseState = 2
 					break
-
-			if parseState != 2:
+			if parseState == 0:
 				raise PgsRemoveUserError("Invalid format of passwd file")
-
-			lineList.pop(i)
-			bufPasswd = "\n".join(lineList)
+			if parseState == 2:
+				lineList.pop(i)
+				bufPasswd = "\n".join(lineList)
 
 		# modify bufGroup
 		if True:
@@ -273,26 +277,21 @@ class PasswdGroupShadow:
 			parseState = 0
 			for i in range(0, len(lineList)):
 				line = lineList[i]
-			
 				if line == "# Normal groups":
 					parseState = 1
 					continue
-
 				if parseState == 0:
 					continue
-
 				if line == "" or line.startswith("#"):
-					raise PgsRemoveUserError("Invalid format of group file")
-
-				if line.split("\n")[0] == username:
+					break
+				if line.split(":")[0] == username:
 					parseState = 2
 					break
-
-			if parseState != 2:
+			if parseState == 0:
 				raise PgsRemoveUserError("Invalid format of group file")
-
-			lineList.pop(i)
-			bufGroup = "\n".join(lineList)
+			if parseState == 2:
+				lineList.pop(i)
+				bufGroup = "\n".join(lineList)
 			
 		# modify bufShadow
 		if True:
@@ -300,14 +299,12 @@ class PasswdGroupShadow:
 			found = False
 			for i in range(0, len(lineList)):
 				line = lineList[i]
-				if line.split("\n")[0] == username:
+				if line.split(":")[0] == username:
 					found = True
 					break
-			if not found:
-				raise PgsRemoveUserError("Invalid format of shadow file")
-
-			lineList.pop(i)
-			bufShadow = "\n".join(lineList)
+			if found:
+				lineList.pop(i)
+				bufShadow = "\n".join(lineList)
 
 		# modify bufGshadow
 		if True:
@@ -315,14 +312,12 @@ class PasswdGroupShadow:
 			found = False
 			for i in range(0, len(lineList)):
 				line = lineList[i]
-				if line.split("\n")[0] == username:
+				if line.split(":")[0] == username:
 					found = True
 					break
-			if not found:
-				raise PgsRemoveUserError("Invalid format of gshadow file")
-
-			lineList.pop(i)
-			bufGshadow = "\n".join(lineList)
+			if found:
+				lineList.pop(i)
+				bufGshadow = "\n".join(lineList)
 
 		# write files
 		self._writeFile(self.passwdFile, bufPasswd)
@@ -344,7 +339,7 @@ class PasswdGroupShadow:
 				raise PgsFormatError("No shadow entry for system user %s"%(uname))
 
 		# check normal user list
-		if self.normalUserList != self.groupForNormalUserList:
+		if self.normalUserList != self.perUserGroupList:
 			raise PgsFormatError("Invalid normal user list")
 		for uname in self.normalUserList:
 			if pwd.getpwnam(uname).pw_uid not in range(1000, 10000):
@@ -353,8 +348,8 @@ class PasswdGroupShadow:
 				raise PgsFormatError("User ID and group ID not equal for normal user %s"%(uname))
 			if uname not in self.shadowDict:
 				raise PgsFormatError("No shadow entry for normal user %s"%(uname))
-			if len(self.shadowDict[uname].sh_pwd) <= 4:
-				raise PgsFormatError("No password for normal user %s"%(uname))
+#			if len(self.shadowDict[uname].sh_pwd) <= 4:
+#				raise PgsFormatError("No password for normal user %s"%(uname))
 
 		# check software user list
 		if self.softwareUserList != self.groupForSoftwareUserList:
@@ -374,7 +369,7 @@ class PasswdGroupShadow:
 			raise PgsFormatError("Invalid system group list")
 
 		# check normal group list
-		if self.normalGroupList[len(self.normalGroupList) - len(self.groupForNormalUserList):] != self.groupForNormalUserList:
+		if self.normalGroupList[len(self.normalGroupList) - len(self.perUserGroupList):] != self.perUserGroupList:
 			raise PgsFormatError("Invalid normal group list")
 		for gname in self.normalGroupList:
 			if grp.getgrnam(gname).gr_gid not in range(1000, 10000):
@@ -418,7 +413,7 @@ class PasswdGroupShadow:
 				self.groupForSystemUserList.append(grp.getgrgid(t[3]).gr_name)
 			if part == "normal":
 				self.normalUserList.append(t[0])
-				self.groupForNormalUserList.append(grp.getgrgid(t[3]).gr_name)
+				self.perUserGroupList.append(grp.getgrgid(t[3]).gr_name)
 			if part == "software":
 				self.softwareUserList.append(t[0])
 				self.groupForSoftwareUserList.append(grp.getgrgid(t[3]).gr_name)
