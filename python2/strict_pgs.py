@@ -335,6 +335,8 @@ class PasswdGroupShadow:
 		if self.systemUserList != [ "root", "nobody" ]:
 			raise PgsFormatError("Invalid system user list")
 		for uname in self.systemUserList:
+			if pwd.getpwnam(uname).pw_gecos != "":
+				raise PgsFormatError("No comment is allowed for system user %s"%(uname))
 			if uname not in self.shadowDict:
 				raise PgsFormatError("No shadow entry for system user %s"%(uname))
 
@@ -346,6 +348,8 @@ class PasswdGroupShadow:
 				raise PgsFormatError("User ID out of range for normal user %s"%(uname))
 			if pwd.getpwnam(uname).pw_uid != grp.getgrnam(uname).gr_gid:
 				raise PgsFormatError("User ID and group ID not equal for normal user %s"%(uname))
+			if pwd.getpwnam(uname).pw_gecos != "":
+				raise PgsFormatError("No comment is allowed for normal user %s"%(uname))
 			if uname not in self.shadowDict:
 				raise PgsFormatError("No shadow entry for normal user %s"%(uname))
 #			if len(self.shadowDict[uname].sh_pwd) <= 4:
