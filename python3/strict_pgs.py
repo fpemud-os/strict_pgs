@@ -369,7 +369,7 @@ class PasswdGroupShadow:
 				raise PgsFormatError("Should not have shadow entry for software user %s"%(uname))
 
 		# check system group list
-		if self.systemGroupList != [ "root", "nogroup", "wheel", "users", "games" ]:
+		if self.systemGroupList != [ "root", "nobody", "wheel", "users", "games" ]:
 			raise PgsFormatError("Invalid system group list")
 
 		# check normal group list
