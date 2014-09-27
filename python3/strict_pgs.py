@@ -1,7 +1,8 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 # strict_pgs.py - strict passwd group shadow
-# Copyright (c) 2005-2011 Fpemu <fpemud@sina.com>
+#
+# Copyright (c) 2005-2011 Fpemud <fpemud@sina.com>
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -20,6 +21,7 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
+
 """
 strict_pgs
 
@@ -32,9 +34,7 @@ import os
 import pwd
 import grp
 
-
 __author__ = "fpemud@sina.com (Fpemud)"
-
 __version__ = "0.0.1"
 
 import os
@@ -147,7 +147,7 @@ class PasswdGroupShadow:
 			lastLine = ""
 			for i in range(0, len(lineList)):
 				line = lineList[i]
-			
+
 				if line == "# Normal users":
 					parseState = 1
 					continue
@@ -188,7 +188,7 @@ class PasswdGroupShadow:
 			lastLine = ""
 			for i in range(0, len(lineList)):
 				line = lineList[i]
-			
+
 				if line == "# Normal groups":
 					parseState = 1
 					continue
@@ -215,7 +215,7 @@ class PasswdGroupShadow:
 				newGid = int(lastLine.split(":")[2]) + 1
 			if newGid != newUid:
 				raise PgsAddUserError("Invalid new group id")
-				
+
 			# insert new group
 			newGroupLine = "%s:x:%d:"%(username, newGid)
 			lineList.insert(i, newGroupLine)
@@ -292,7 +292,7 @@ class PasswdGroupShadow:
 			if parseState == 2:
 				lineList.pop(i)
 				bufGroup = "\n".join(lineList)
-			
+
 		# modify bufShadow
 		if True:
 			lineList = bufShadow.split("\n")
