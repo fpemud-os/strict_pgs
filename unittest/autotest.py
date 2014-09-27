@@ -1,28 +1,28 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
+# -*- coding: utf-8; tab-width: 4; indent-tabs-mode: t -*-
 
 import os
 import sys
+import shutil
 import unittest
-
 if sys.version_info >= (3, 0):
 	sys.path.insert(0, "../python3")
 else:
 	sys.path.insert(0, "../python2")
 from strict_pgs import PasswdGroupShadow
 
-class MyTestCase(unittest.TestCase):
-	def setUp(self):
-		self.prefix = os.path.dirname(os.path.abspath(__file__))
-
-	def tearDown(self):
-		pass
-
+class ReadEmptyData(unittest.TestCase):
 	def runTest(self):
-		pgs = PasswdGroupShadow(self.prefix)
+		pgs = PasswdGroupShadow("./empty-data")
+
+class ReadFullData(unittest.TestCase):
+	def runTest(self):
+		pgs = PasswdGroupShadow("./full-data")
 
 def suite():
 	suite = unittest.TestSuite()
-	suite.addTest(MyTestCase())
+	suite.addTest(ReadEmptyData())
+	suite.addTest(ReadFullData())
 	return suite
 
 if __name__ == "__main__":

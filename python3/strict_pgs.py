@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8; tab-width: 4; indent-tabs-mode: t -*-
 
-# strict_pgs.py - strict passwd group shadow
+# strict_pgs.py - strict passwd/group/shadow
 #
 # Copyright (c) 2005-2011 Fpemud <fpemud@sina.com>
 #
@@ -31,8 +32,7 @@ strict_pgs
 """
 
 import os
-import pwd
-import grp
+from collections import OrderedDict
 
 __author__ = "fpemud@sina.com (Fpemud)"
 __version__ = "0.0.1"
@@ -49,6 +49,23 @@ class PgsRemoveUserError(Exception):
 class PasswdGroupShadow:
 	"""A passwd/group/shadow file with special format and rules"""
 
+	class _PwdEntry:
+		def __init__(self, fields):
+			self.pw_name = fields[0]
+			self.pw_passwd = fields[1]
+			self.pw_uid = int(fields[2])
+			self.pw_gid = int(fields[3])
+			self.pw_gecos = fields[4]
+			self.pw_dir = fields[5]
+			self.pw_shell = fields[6]
+
+	class _GrpEntry:
+		def __init__(self, fields):
+			self.gr_name = fields[0]
+			self.gr_passwd = fields[1] 
+			self.gr_gid = int(fields[2])
+			self.gr_mem = fields[3]
+
 	class _ShadowEntry:
 		def __init__(self, pwd):
 			self.sh_pwd = pwd
@@ -62,24 +79,31 @@ class PasswdGroupShadow:
 
 		# filled by _parsePasswd
 		self.systemUserList = []
-		self.groupForSystemUserList = []
 		self.normalUserList = []
-		self.perUserGroupList = []
 		self.softwareUserList = []
-		self.groupForSoftwareUserList = []
+		self.deprecatedUserList = []
+		self.pwdDict = dict()
 
 		# filled by _parseGroup
 		self.systemGroupList = []
 		self.deviceGroupList = []
-		self.normalGroupList = []
+		self.perUserGroupList = []
+		self.standAloneGroupList = []
 		self.softwareGroupList = []
-		self.secondaryGroupsDict = dict()		# key: username; value: all secondary groups of that user
+		self.deprecatedGroupList = []
+		self.secondaryGroupsDict = dict()		# key: username; value: secondary group list of that user
+		self.grpDict = dict()
 
 		# filled by _parseShadow
-		self.shadowDict = dict()
+		self.shadowDict = OrderedDict()
 
 		# do parsing
-		self._parse()
+		self._parsePasswd()
+		self._parseGroup()
+		self._parseShadow()
+
+		# do verify
+		self._verifyStage1()
 
 	def getSystemUserList(self):
 		"""returns system user name list"""
@@ -93,38 +117,23 @@ class PasswdGroupShadow:
 		"""returns system group name list"""
 		return self.systemGroupList
 
-	def getPerUserGroupList(self):
-		"""returns per-user group name list"""
-		return self.perUserGroupList
-
-	def getNormalGroupList(self):
-		"""returns normal group name list"""
-		ret = []
-		for gname in self.normalGroupList:
-			if gname in self.perUserGroupList:
-				continue
-			ret.append(gname)
-		return ret
+	def getStandAloneGroupList(self):
+		"""returns stand-alone group name list"""
+		return self.standAloneGroupList
 
 	def getSecondaryGroupsOfUser(self, username):
 		"""returns group name list"""
+		assert username in self.normalUserList
+		return self.secondaryGroupsDict.get(username, [])
 
-		if username in self.secondaryGroupsDict:
-			return self.secondaryGroupsDict[username]
-		else:
-			return []
+	def verify(self):
+		"""check passwd/group/shadow according to the critiera"""
+		self._verifyStage1()
+		self._verifyStage2()
 
 	def addNormalUser(self, username, password):
-		try:
-			pwd.getpwnam(username)
-			assert False
-		except:
-			pass
-		try:
-			pwd.getgrnam(username)
-			assert False
-		except:
-			pass
+		assert not username in self.pwdDict
+		assert not self._groupExists(username)
 
 		# read files
 		bufPasswd = self._readFile(self.passwdFile)
@@ -168,7 +177,7 @@ class PasswdGroupShadow:
 			newUid = 1000
 			if lastLine != "":
 				newUid = int(lastLine.split(":")[2]) + 1
-			if newUid > 10000:
+			if newUid >= 10000:
 				raise PgsAddUserError("Invalid new user id")
 
 			# insert new user
@@ -321,83 +330,31 @@ class PasswdGroupShadow:
 		self._writeFile(self.shadowFile, bufShadow)
 		self._writeFile(self.gshadowFile, bufGshadow)
 
-	def _parse(self):
-		# parse
-		self._parsePasswd()
-		self._parseGroup()
-		self._parseShadow()
+	def addStandAloneGroup(self, groupname):
+		assert False
 
-		# check system user list
-		if self.systemUserList != [ "root", "nobody" ]:
-			raise PgsFormatError("Invalid system user list")
-		for uname in self.systemUserList:
-			if pwd.getpwnam(uname).pw_gecos != "":
-				raise PgsFormatError("No comment is allowed for system user %s"%(uname))
-			if uname not in self.shadowDict:
-				raise PgsFormatError("No shadow entry for system user %s"%(uname))
+	def removeStandAloneGroup(self, groupname):
+		assert False
 
-		# check normal user list
-		if self.normalUserList != self.perUserGroupList:
-			raise PgsFormatError("Invalid normal user list")
-		for uname in self.normalUserList:
-			if not (1000 < pwd.getpwnam(uname).pw_uid < 10000):
-				raise PgsFormatError("User ID out of range for normal user %s"%(uname))
-			if pwd.getpwnam(uname).pw_uid != grp.getgrnam(uname).gr_gid:
-				raise PgsFormatError("User ID and group ID not equal for normal user %s"%(uname))
-			if pwd.getpwnam(uname).pw_gecos != "":
-				raise PgsFormatError("No comment is allowed for normal user %s"%(uname))
-			if uname not in self.shadowDict:
-				raise PgsFormatError("No shadow entry for normal user %s"%(uname))
-#			if len(self.shadowDict[uname].sh_pwd) <= 4:
-#				raise PgsFormatError("No password for normal user %s"%(uname))
-
-		# check software user list
-		if self.softwareUserList != self.groupForSoftwareUserList:
-			raise PgsFormatError("Invalid software user list")
-		for uname in self.softwareUserList:
-			if pwd.getpwnam(uname).pw_uid >= 1000:
-				raise PgsFormatError("User ID out of range for software user %s"%(uname))
-			if pwd.getpwnam(uname).pw_uid != grp.getgrnam(uname).gr_gid:
-				raise PgsFormatError("User ID and group ID not equal for software user %s"%(uname))
-			if pwd.getpwnam(uname).pw_shell != "/sbin/nologin":
-				raise PgsFormatError("Invalid shell for software user %s"%(uname))
-			if uname in self.shadowDict:
-				raise PgsFormatError("Should not have shadow entry for software user %s"%(uname))
-
-		# check system group list
-		if self.systemGroupList != [ "root", "nobody", "wheel", "users", "games" ]:
-			raise PgsFormatError("Invalid system group list")
-
-		# check normal group list
-		if self.normalGroupList[len(self.normalGroupList) - len(self.perUserGroupList):] != self.perUserGroupList:
-			raise PgsFormatError("Invalid normal group list")
-		for gname in self.normalGroupList:
-			if not (1000 < grp.getgrnam(gname).gr_gid < 10000):
-				raise PgsFormatError("Group ID out of range for normal group %s"%(gname))
-
-		# check software group list
-		for gname in self.softwareGroupList:
-			if grp.getgrnam(gname).gr_gid >= 1000:
-				raise PgsFormatError("Group ID out of range for software group %s"%(gname))
+	def save(self):
+		assert False
 
 	def _parsePasswd(self):
-		lineList = self._readFile(self.passwdFile).split("\n")
-
 		part = ""
-		for line in lineList:
+		for line in self._readFile(self.passwdFile).split("\n"):
 			if line == "":
 				continue
 
-			if line == "# System users":
+			if line == "# system users":
 				part = "system"
 				continue
-			elif line == "# Normal users":
+			elif line == "# normal users":
 				part = "normal"
 				continue
-			elif line == "# Software users":
+			elif line == "# software users":
 				part = "software"
 				continue
-			elif line == "# Deprecated":
+			elif line == "# deprecated":
 				part = "deprecated"
 				continue
 
@@ -406,39 +363,44 @@ class PasswdGroupShadow:
 
 			t = line.split(":")
 			if len(t) != 7:
+				# passwd file entry format should be "username:passwod:uid:gid:comment:home-directory:shell"
 				raise PgsFormatError("Invalid format of passwd file")
+
+			self.pwdDict[t[0]] = self._PwdEntry(t)
 
 			if part == "system":
 				self.systemUserList.append(t[0])
-				self.groupForSystemUserList.append(grp.getgrgid(t[3]).gr_name)
-			if part == "normal":
+			elif part == "normal":
 				self.normalUserList.append(t[0])
-				self.perUserGroupList.append(grp.getgrgid(t[3]).gr_name)
-			if part == "software":
+			elif part == "software":
 				self.softwareUserList.append(t[0])
-				self.groupForSoftwareUserList.append(grp.getgrgid(t[3]).gr_name)
+			elif part == "deprecated":
+				self.deprecatedUserList.append(t[0])
+			else:
+				assert False
 
 	def _parseGroup(self):
-		lineList = self._readFile(self.groupFile).split("\n")
-
 		part = ""
-		for line in lineList:
+		for line in self._readFile(self.groupFile).split("\n"):
 			if line == "":
 				continue
 
-			if line == "# System groups":
+			if line == "# system groups":
 				part = "system"
 				continue
-			elif line == "# Device groups":
+			elif line == "# device groups":
 				part = "device"
 				continue
-			elif line == "# Normal groups":
-				part = "normal"
+			elif line == "# per-user groups":
+				part = "per-user"
 				continue
-			elif line == "# Software groups":
+			elif line == "# stand-alone groups":
+				part = "stand-alone"
+				continue
+			elif line == "# software groups":
 				part = "software"
 				continue
-			elif line == "# Deprecated":
+			elif line == "# deprecated":
 				part = "deprecated"
 				continue
 
@@ -447,16 +409,25 @@ class PasswdGroupShadow:
 
 			t = line.split(":")
 			if len(t) != 4:
+				# group file entry format should be "groupname:passwod:gid:member-list"
 				raise PgsFormatError("Invalid format of group file")
+
+			self.grpDict[t[0]] = self._GrpEntry(t)
 
 			if part == "system":
 				self.systemGroupList.append(t[0])
-			if part == "device":
+			elif part == "device":
 				self.deviceGroupList.append(t[0])
-			if part == "normal":
-				self.normalGroupList.append(t[0])
-			if part == "software":
+			elif part == "per-user":
+				self.perUserGroupList.append(t[0])
+			elif part == "stand-alone":
+				self.standAloneGroupList.append(t[0])
+			elif part == "software":
 				self.softwareGroupList.append(t[0])
+			elif part == "deprecated":
+				self.deprecatedGroupList.append(t[0])
+			else:
+				assert False
 
 			for u in t[3].split(","):
 				if u == "":
@@ -466,29 +437,117 @@ class PasswdGroupShadow:
 				self.secondaryGroupsDict[u].append(t[0])
 
 	def _parseShadow(self):
-		lineList = self._readFile(self.shadowFile).split("\n")
-
-		for line in lineList:
+		for line in self._readFile(self.shadowFile).split("\n"):
 			if line == "":
 				continue
 
 			t = line.split(":")
 			if len(t) != 9:
+				# shadow file entry format should be "username:encrypted-password:last:min:max:warn:inactive:expire"
+				# the last 6 fields are for password aging and account lockout features, they should be empty
 				raise PgsFormatError("Invalid format of shadow file")
 
 			self.shadowDict[t[0]] = self._ShadowEntry(t[1])
 
+	def _verifyStage1(self):
+		# check system user list
+		if self.systemUserList != [ "root", "nobody" ]:
+			raise PgsFormatError("Invalid system user list")
+		for uname in self.systemUserList:
+			if self.pwdDict[uname].pw_gecos != "":
+				raise PgsFormatError("No comment is allowed for system user %s"%(uname))
+			if uname not in self.shadowDict:
+				raise PgsFormatError("No shadow entry for system user %s"%(uname))
+
+		# check normal user list
+		if self.normalUserList != self.perUserGroupList:
+			raise PgsFormatError("Invalid normal user list")
+		for uname in self.normalUserList:
+			if not (1000 <= self.pwdDict[uname].pw_uid < 10000):
+				raise PgsFormatError("User ID out of range for normal user %s"%(uname))
+			if self.pwdDict[uname].pw_uid != self.grpDict[uname].gr_gid:
+				raise PgsFormatError("User ID and group ID not equal for normal user %s"%(uname))
+			if self.pwdDict[uname].pw_gecos != "":
+				raise PgsFormatError("No comment is allowed for normal user %s"%(uname))
+			if uname not in self.shadowDict:
+				raise PgsFormatError("No shadow entry for normal user %s"%(uname))
+			if len(self.shadowDict[uname].sh_pwd) <= 4:
+				raise PgsFormatError("No password for normal user %s"%(uname))
+
+		# check system group list
+		if self.systemGroupList != [ "root", "nobody", "wheel", "users", "games" ]:
+			raise PgsFormatError("Invalid system group list")
+
+		# check per-user group list
+		if self.perUserGroupList != self.normalUserList:
+			raise PgsFormatError("Invalid per-user group list")
+
+		# check stand-alone group list
+		for gname in self.standAloneGroupList:
+			if not (1000 <= self.grpDict[gname].gr_gid < 10000):
+				raise PgsFormatError("Group ID out of range for stand-alone group %s"%(gname))
+
+	def _verifyStage2(self):
+		# check normal user list
+		uidList = [self.pwdDict[x].pw_uid for x in self.normalUserList]
+		if uidList != sorted(uidList):
+			raise PgsFormatError("Invalid normal user sequence")
+
+		# check software user list
+		if self.softwareUserList != self.softwareGroupList:
+			raise PgsFormatError("Invalid software user list")
+		for uname in self.softwareUserList:
+			if self.pwdDict[uname].pw_uid >= 1000:
+				raise PgsFormatError("User ID out of range for software user %s"%(uname))
+			if self.pwdDict[uname].pw_uid != self.grpDict[uname].gr_gid:
+				raise PgsFormatError("User ID and group ID not equal for software user %s"%(uname))
+			if self.pwdDict[uname].pw_shell != "/sbin/nologin":
+				raise PgsFormatError("Invalid shell for software user %s"%(uname))
+			if uname in self.shadowDict:
+				raise PgsFormatError("Should not have shadow entry for software user %s"%(uname))
+
+		# check stand-alone group list
+		gidList = [self.grpDict[x].gr_gid for x in self.standAloneGroupList]
+		if gidList != sorted(gidList):
+			raise PgsFormatError("Invalid stand-alone group sequence")
+
+		# check software group list
+		for gname in self.softwareGroupList:
+			if self.grpDict[gname].gr_gid >= 1000:
+				raise PgsFormatError("Group ID out of range for software group %s"%(gname))
+
+		# check secondary groups dict
+		for uname, grpList in self.secondaryGroupsDict.items():
+			if uname not in self.systemUserList + self.normalUserList + self.softwareUserList:
+				continue
+			for gname in grpList:
+				if gname in self.deprecatedGroupList:
+					raise PgsFormatError("User %s is a member of deprecated group %s"%(uname, gname))
+
+		# check /etc/shadow
+		shadowEntryList = self.shadowDict.keys()
+		i = 0
+		if self.systemUserList != shadowEntryList[i:len(self.systemUserList)]:
+			raise PgsFormatError("Invalid shadow file entry order")
+		i += len(self.systemUserList)
+		if self.normalUserList != shadowEntryList[i:len(self.normalUserList)]:
+			raise PgsFormatError("Invalid shadow file entry order")
+		i += len(self.systemUserList)
+		if i != len(shadowEntryList):
+			raise PgsFormatError("Redundant shadow file entries")
+
+		# check /etc/gshadow
+		if len(self._readFile(self.gshadowFile)) > 0:
+			raise PgsFormatError("gshadow file should be empty")
+
 	def _readFile(self, filename):
 		"""Read file, returns the whole content"""
 
-		f = open(filename, 'r')
-		buf = f.read()
-		f.close()
-		return buf
+		with open(filename, 'r') as f:
+			return f.read()
 
 	def _writeFile(self, filename, buf):
 		"""Write buffer to file"""
 
-		f = open(filename, 'w')
-		f.write(buf)
-		f.close()
+		with open(filename, 'w') as f:
+			f.write(buf)
