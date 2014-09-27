@@ -32,7 +32,6 @@ strict_pgs
 
 import os
 import string
-import random
 import shutil
 from collections import OrderedDict
 
