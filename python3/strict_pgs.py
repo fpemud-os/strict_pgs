@@ -31,6 +31,9 @@ strict_pgs
 """
 
 import os
+import string
+import random
+import shutil
 from collections import OrderedDict
 
 __author__ = "fpemud@sina.com (Fpemud)"
@@ -53,25 +56,66 @@ class PasswdGroupShadow:
     """A passwd/group/shadow file with special format and rules"""
 
     class _PwdEntry:
-        def __init__(self, fields):
-            self.pw_name = fields[0]
-            self.pw_passwd = fields[1]
-            self.pw_uid = int(fields[2])
-            self.pw_gid = int(fields[3])
-            self.pw_gecos = fields[4]
-            self.pw_dir = fields[5]
-            self.pw_shell = fields[6]
+        def __init__(self, *kargs):
+            if len(kargs) == 1:
+                fields = kargs[0]
+                assert len(fields) == 7
+                self.pw_name = fields[0]
+                self.pw_passwd = fields[1]
+                self.pw_uid = int(fields[2])
+                self.pw_gid = int(fields[3])
+                self.pw_gecos = fields[4]
+                self.pw_dir = fields[5]
+                self.pw_shell = fields[6]
+            elif len(kargs) == 7:
+                assert isinstance(kargs[2], int) and isinstance(kargs[3], int)
+                self.pw_name = kargs[0]
+                self.pw_passwd = kargs[1]
+                self.pw_uid = kargs[2]
+                self.pw_gid = kargs[3]
+                self.pw_gecos = kargs[4]
+                self.pw_dir = kargs[5]
+                self.pw_shell = kargs[6]
+            else:
+                assert False
 
     class _GrpEntry:
-        def __init__(self, fields):
-            self.gr_name = fields[0]
-            self.gr_passwd = fields[1]
-            self.gr_gid = int(fields[2])
-            self.gr_mem = fields[3]
+        def __init__(self, *kargs):
+            if len(kargs) == 1:
+                fields = kargs[0]
+                assert len(fields) == 4
+                self.gr_name = fields[0]
+                self.gr_passwd = fields[1]
+                self.gr_gid = int(fields[2])
+                self.gr_mem = fields[3]
+            elif len(kargs) == 4:
+                assert isinstance(kargs[2], int)
+                self.gr_name = kargs[0]
+                self.gr_passwd = kargs[1]
+                self.gr_gid = kargs[2]
+                self.gr_mem = kargs[3]
+            else:
+                assert False
 
     class _ShadowEntry:
-        def __init__(self, pwd):
-            self.sh_pwd = pwd
+        def __init__(self, *kargs):
+            if len(kargs) == 1:
+                fields = kargs[0]
+                assert len(fields) == 9
+                self.sh_name = fields[0]
+                self.sh_encpwd = fields[1]
+            elif len(kargs) == 9:
+                self.sh_name = kargs[0]
+                self.sh_encpwd = kargs[1]
+                assert kargs[2] == ""
+                assert kargs[3] == ""
+                assert kargs[4] == ""
+                assert kargs[5] == ""
+                assert kargs[6] == ""
+                assert kargs[7] == ""
+                assert kargs[8] == ""
+            else:
+                assert False
 
     def __init__(self, dirPrefix="/"):
         self.dirPrefix = dirPrefix
@@ -102,7 +146,7 @@ class PasswdGroupShadow:
 
         # do parsing
         self._parsePasswd()
-        self._parseGroup()
+        self._parseGroup(self.normalUserList)
         self._parseShadow()
 
         # do verify
@@ -138,306 +182,241 @@ class PasswdGroupShadow:
         assert username not in self.pwdDict
         assert username not in self.grpDict
 
-        # read files
-        bufPasswd = self._readFile(self.passwdFile)
-        bufGroup = self._readFile(self.groupFile)
-        bufShadow = self._readFile(self.shadowFile)
-        bufGshadow = self._readFile(self.gshadowFile)
-
-        newUid = -1
-        newGid = -1
-
-        # modify bufPasswd
-        if True:
-            # get new user position
-            lineList = bufPasswd.split("\n")
-            parseState = 0
-            lastLine = ""
-            for i in range(0, len(lineList)):
-                line = lineList[i]
-
-                if line == "# Normal users":
-                    parseState = 1
-                    continue
-
-                if parseState == 0:
-                    continue
-
-                if line.startswith("#"):
-                    raise PgsAddUserError("Invalid format of passwd file")
-
-                if line != "":
-                    lastLine = line
-                    continue
-
-                if line == "":
-                    break
-
-            if parseState != 1:
-                raise PgsAddUserError("Invalid format of passwd file")
-
-            # get new user id
-            newUid = 1000
-            if lastLine != "":
-                newUid = int(lastLine.split(":")[2]) + 1
+        # generate user id
+        newUid = 1000
+        while True:
             if newUid >= 10000:
-                raise PgsAddUserError("Invalid new user id")
+                raise PgsAddUserError("Can not find a valid user id")
+            if newUid in [v.pw_uid for v in self.pwdDict.values()]:
+                newUid += 1
+                continue
+            if newUid in [v.gr_gid for v in self.grpDict.values()]:
+                newUid += 1
+                continue
+            break
 
-            # insert new user
-            newUserLine = "%s:x:%d:%d::/home/%s:/bin/bash" % (username, newUid, newUid, username)
-            lineList.insert(i, newUserLine)
-            bufPasswd = "\n".join(lineList)
+        # encrypt password
+        newPwd = password
 
-        # modify bufGroup
-        if True:
-            # get new group position
-            lineList = bufGroup.split("\n")
-            parseState = 0
-            lastLine = ""
-            for i in range(0, len(lineList)):
-                line = lineList[i]
+        # add user
+        self.pwdDict[username] = self._PwdEntry(username, "x", newUid, newUid, "", "/home/%s" % (username), "/bin/bash")
+        self.normalUserList.append(username)
 
-                if line == "# Normal groups":
-                    parseState = 1
-                    continue
+        # add group
+        self.grpDict[username] = self._GrpEntry(username, "x", newUid, "")
+        self.perUserGroupList.append(username)
 
-                if parseState == 0:
-                    continue
-
-                if line.startswith("#"):
-                    raise PgsAddUserError("Invalid format of group file")
-
-                if line != "":
-                    lastLine = line
-                    continue
-
-                if line == "":
-                    break
-
-            if parseState != 1:
-                raise PgsAddUserError("Invalid format of group file")
-
-            # get new group id
-            newGid = 1000
-            if lastLine != "":
-                newGid = int(lastLine.split(":")[2]) + 1
-            if newGid != newUid:
-                raise PgsAddUserError("Invalid new group id")
-
-            # insert new group
-            newGroupLine = "%s:x:%d:" % (username, newGid)
-            lineList.insert(i, newGroupLine)
-            bufGroup = "\n".join(lineList)
-
-        # modify bufShadow
-        if True:
-            if not bufShadow.endswith("\n"):
-                bufShadow += "\n"
-            bufShadow += "%s:x:15929:0:99999:7:::\n" % (username)
-
-        # modify bufGshadow
-        if True:
-            if not bufGshadow.endswith("\n"):
-                bufGshadow += "\n"
-            bufGshadow += "%s:!::\n" % (username)
-
-        # write files
-        self._writeFile(self.passwdFile, bufPasswd)
-        self._writeFile(self.groupFile, bufGroup)
-        self._writeFile(self.shadowFile, bufShadow)
-        self._writeFile(self.gshadowFile, bufGshadow)
+        # add shadow
+        self.shadowDict[username] = self._ShadowEntry(username, newPwd, "", "", "", "", "", "", "")
 
     def removeNormalUser(self, username):
-        """do nothing if the user doesn't exists
-           can remove half-created user"""
+        """do nothing if the user doesn't exists"""
 
-        # read files
-        bufPasswd = self._readFile(self.passwdFile)
-        bufGroup = self._readFile(self.groupFile)
-        bufShadow = self._readFile(self.shadowFile)
-        bufGshadow = self._readFile(self.gshadowFile)
+        del self.shadowDict[username]
 
-        # modify bufPasswd
-        if True:
-            lineList = bufPasswd.split("\n")
-            parseState = 0
-            for i in range(0, len(lineList)):
-                line = lineList[i]
-                if line == "# Normal users":
-                    parseState = 1
-                    continue
-                if parseState == 0:
-                    continue
-                if line == "" or line.startswith("#"):
-                    break
-                if line.split(":")[0] == username:
-                    parseState = 2
-                    break
-            if parseState == 0:
-                raise PgsRemoveUserError("Invalid format of passwd file")
-            if parseState == 2:
-                lineList.pop(i)
-                bufPasswd = "\n".join(lineList)
+        del self.secondaryGroupsDict[username]
+        for gname, entry in self.grpDict.items():
+            ulist = entry.gr_mem.split(",")
+            ulist.remove(username)
+            self.grpDict[gname].gr_mem = ",".join(ulist)
 
-        # modify bufGroup
-        if True:
-            lineList = bufGroup.split("\n")
-            parseState = 0
-            for i in range(0, len(lineList)):
-                line = lineList[i]
-                if line == "# Normal groups":
-                    parseState = 1
-                    continue
-                if parseState == 0:
-                    continue
-                if line == "" or line.startswith("#"):
-                    break
-                if line.split(":")[0] == username:
-                    parseState = 2
-                    break
-            if parseState == 0:
-                raise PgsRemoveUserError("Invalid format of group file")
-            if parseState == 2:
-                lineList.pop(i)
-                bufGroup = "\n".join(lineList)
+        self.perUserGroupList.remove(username)
+        del self.grpDict[username]
 
-        # modify bufShadow
-        if True:
-            lineList = bufShadow.split("\n")
-            found = False
-            for i in range(0, len(lineList)):
-                line = lineList[i]
-                if line.split(":")[0] == username:
-                    found = True
-                    break
-            if found:
-                lineList.pop(i)
-                bufShadow = "\n".join(lineList)
+        self.normalUserList.remove(username)
+        del self.pwdDict[username]
 
-        # modify bufGshadow
-        if True:
-            lineList = bufGshadow.split("\n")
-            found = False
-            for i in range(0, len(lineList)):
-                line = lineList[i]
-                if line.split(":")[0] == username:
-                    found = True
-                    break
-            if found:
-                lineList.pop(i)
-                bufGshadow = "\n".join(lineList)
-
-        # write files
-        self._writeFile(self.passwdFile, bufPasswd)
-        self._writeFile(self.groupFile, bufGroup)
-        self._writeFile(self.shadowFile, bufShadow)
-        self._writeFile(self.gshadowFile, bufGshadow)
-
-    def addStandAloneGroup(self, groupname):
+    def modifyNormalUser(self, username, opName, *kargs):
         assert False
 
+    def addStandAloneGroup(self, groupname):
+        assert groupname not in self.grpDict
+
+        # generate group id
+        newGid = 5000
+        while True:
+            if newGid >= 10000:
+                raise PgsAddUserError("Can not find a valid group id")
+            if newGid in [v.grp_gid for v in self.grpDict.values()]:
+                newGid += 1
+                continue
+            break
+
+        # add group
+        self.grpDict[groupname] = self._GrpEntry(groupname, "x", newGid, "")
+        self.standAloneGroupList.append(groupname)
+
     def removeStandAloneGroup(self, groupname):
+        for glist in self.secondaryGroupsDict.values():
+            glist.remove(groupname)
+        self.standAloneGroupList.remove(groupname)
+        del self.grpDict[groupname]
+
+    def modifyStandAloneGroup(self, groupname, opName, *kargs):
         assert False
 
     def save(self):
-        assert False
+        self._fixate()
+        self._writePasswd()
+        self._writeGroup()
+        self._writeShadow()
+        self._writeGroupShadow()
 
     def _parsePasswd(self):
-        part = ""
-        for line in self._readFile(self.passwdFile).split("\n"):
-            if line == "":
-                continue
+        lineList = self._readFile(self.passwdFile).split("\n")
 
-            if line == "# system users":
-                part = "system"
-                continue
-            elif line == "# normal users":
-                part = "normal"
-                continue
-            elif line == "# software users":
-                part = "software"
-                continue
-            elif line == "# deprecated":
-                part = "deprecated"
-                continue
+        needConvert = True
+        for line in lineList:
+            if line != "":
+                if line == "# system users":
+                    needConvert = False
+                else:
+                    needConvert = True
+            break
 
-            if part == "":
-                raise PgsFormatError("Invalid format of passwd file")
-
-            t = line.split(":")
-            if len(t) != 7:
-                # passwd file entry format should be "username:passwod:uid:gid:comment:home-directory:shell"
-                raise PgsFormatError("Invalid format of passwd file")
-
-            self.pwdDict[t[0]] = self._PwdEntry(t)
-
-            if part == "system":
-                self.systemUserList.append(t[0])
-            elif part == "normal":
-                self.normalUserList.append(t[0])
-            elif part == "software":
-                self.softwareUserList.append(t[0])
-            elif part == "deprecated":
-                self.deprecatedUserList.append(t[0])
-            else:
-                assert False
-
-    def _parseGroup(self):
-        part = ""
-        for line in self._readFile(self.groupFile).split("\n"):
-            if line == "":
-                continue
-
-            if line == "# system groups":
-                part = "system"
-                continue
-            elif line == "# device groups":
-                part = "device"
-                continue
-            elif line == "# per-user groups":
-                part = "per-user"
-                continue
-            elif line == "# stand-alone groups":
-                part = "stand-alone"
-                continue
-            elif line == "# software groups":
-                part = "software"
-                continue
-            elif line == "# deprecated":
-                part = "deprecated"
-                continue
-
-            if part == "":
-                raise PgsFormatError("Invalid format of group file")
-
-            t = line.split(":")
-            if len(t) != 4:
-                # group file entry format should be "groupname:passwod:gid:member-list"
-                raise PgsFormatError("Invalid format of group file")
-
-            self.grpDict[t[0]] = self._GrpEntry(t)
-
-            if part == "system":
-                self.systemGroupList.append(t[0])
-            elif part == "device":
-                self.deviceGroupList.append(t[0])
-            elif part == "per-user":
-                self.perUserGroupList.append(t[0])
-            elif part == "stand-alone":
-                self.standAloneGroupList.append(t[0])
-            elif part == "software":
-                self.softwareGroupList.append(t[0])
-            elif part == "deprecated":
-                self.deprecatedGroupList.append(t[0])
-            else:
-                assert False
-
-            for u in t[3].split(","):
-                if u == "":
+        if not needConvert:
+            part = ""
+            for line in lineList:
+                if line == "":
                     continue
-                if u not in self.secondaryGroupsDict:
-                    self.secondaryGroupsDict[u] = []
-                self.secondaryGroupsDict[u].append(t[0])
+
+                if line == "# system users":
+                    part = "system"
+                    continue
+                elif line == "# normal users":
+                    part = "normal"
+                    continue
+                elif line == "# software users":
+                    part = "software"
+                    continue
+                elif line == "# deprecated":
+                    part = "deprecated"
+                    continue
+
+                t = line.split(":")
+                if len(t) != 7:
+                    raise PgsFormatError("Invalid format of passwd file")
+
+                self.pwdDict[t[0]] = self._PwdEntry(t)
+
+                if part == "system":
+                    self.systemUserList.append(t[0])
+                elif part == "normal":
+                    self.normalUserList.append(t[0])
+                elif part == "software":
+                    self.softwareUserList.append(t[0])
+                elif part == "deprecated":
+                    self.deprecatedUserList.append(t[0])
+                else:
+                    assert False
+        else:
+            for line in lineList:
+                if line == "" or line.startswith("#"):
+                    continue
+
+                t = line.split(":")
+                if len(t) != 7:
+                    raise PgsFormatError("Invalid format of passwd file")
+
+                self.pwdDict[t[0]] = self._PwdEntry(t)
+
+                if t[0] in ["root", "nobody"]:
+                    self.systemUserList.append(t[0])
+                elif 1000 <= int(t[2]) < 10000:
+                    self.normalUserList.append(t[0])
+                else:
+                    self.deprecatedUserList.append(t[0])
+
+    def _parseGroup(self, normalUserList):
+        lineList = self._readFile(self.groupFile).split("\n")
+
+        needConvert = True
+        for line in lineList:
+            if line != "":
+                if line == "# system groups":
+                    needConvert = False
+                else:
+                    needConvert = True
+            break
+
+        if not needConvert:
+            part = ""
+            for line in lineList:
+                if line == "":
+                    continue
+
+                if line == "# system groups":
+                    part = "system"
+                    continue
+                elif line == "# device groups":
+                    part = "device"
+                    continue
+                elif line == "# per-user groups":
+                    part = "per-user"
+                    continue
+                elif line == "# stand-alone groups":
+                    part = "stand-alone"
+                    continue
+                elif line == "# software groups":
+                    part = "software"
+                    continue
+                elif line == "# deprecated":
+                    part = "deprecated"
+                    continue
+
+                t = line.split(":")
+                if len(t) != 4:
+                    raise PgsFormatError("Invalid format of group file")
+
+                self.grpDict[t[0]] = self._GrpEntry(t)
+
+                if part == "system":
+                    self.systemGroupList.append(t[0])
+                elif part == "device":
+                    self.deviceGroupList.append(t[0])
+                elif part == "per-user":
+                    self.perUserGroupList.append(t[0])
+                elif part == "stand-alone":
+                    self.standAloneGroupList.append(t[0])
+                elif part == "software":
+                    self.softwareGroupList.append(t[0])
+                elif part == "deprecated":
+                    self.deprecatedGroupList.append(t[0])
+                else:
+                    assert False
+
+                for u in t[3].split(","):
+                    if u == "":
+                        continue
+                    if u not in self.secondaryGroupsDict:
+                        self.secondaryGroupsDict[u] = []
+                    self.secondaryGroupsDict[u].append(t[0])
+        else:
+            for line in lineList:
+                if line == "" or line.startswith("#"):
+                    continue
+
+                t = line.split(":")
+                if len(t) != 4:
+                    raise PgsFormatError("Invalid format of group file")
+
+                self.grpDict[t[0]] = self._GrpEntry(t)
+
+                if t[0] in ["root", "nobody", "wheel", "users", "games"]:
+                    self.systemGroupList.append(t[0])
+                elif t[0] in normalUserList:
+                    self.perUserGroupList.append(t[0])
+                elif 1000 <= int(t[2]) < 10000:
+                    self.standAloneGroupList.append(t[0])
+                else:
+                    self.deprecatedGroupList.append(t[0])
+
+                for u in t[3].split(","):
+                    if u == "":
+                        continue
+                    if u not in self.secondaryGroupsDict:
+                        self.secondaryGroupsDict[u] = []
+                    self.secondaryGroupsDict[u].append(t[0])
 
     def _parseShadow(self):
         for line in self._readFile(self.shadowFile).split("\n"):
@@ -446,11 +425,85 @@ class PasswdGroupShadow:
 
             t = line.split(":")
             if len(t) != 9:
-                # shadow file entry format should be "username:encrypted-password:last:min:max:warn:inactive:expire"
-                # the last 6 fields are for password aging and account lockout features, they should be empty
                 raise PgsFormatError("Invalid format of shadow file")
 
-            self.shadowDict[t[0]] = self._ShadowEntry(t[1])
+            self.shadowDict[t[0]] = self._ShadowEntry(t)
+
+    def _writePasswd(self):
+        shutil.copy2(self.passwdFile, self.passwdFile + "-")
+        with open(self.passwdFile, "w") as f:
+            print("# system users", file=f)
+            for uname in self.systemUserList:
+                print(self._pwd2str(self.pwdDict[uname]), file=f)
+            print("", file=f)
+
+            print("# normal users", file=f)
+            for uname in self.normalUserList:
+                print(self._pwd2str(self.pwdDict[uname]), file=f)
+            print("", file=f)
+
+            print("# software users", file=f)
+            for uname in self.softwareUserList:
+                print(self._pwd2str(self.pwdDict[uname]), file=f)
+            print("", file=f)
+
+            print("# deprecated", file=f)
+            for uname in self.deprecatedUserList:
+                print(self._pwd2str(self.pwdDict[uname]), file=f)
+            print("", file=f)
+
+    def _writeGroup(self):
+        shutil.copy2(self.groupFile, self.groupFile + "-")
+        with open(self.groupFile, "w") as f:
+            print("# system groups", file=f)
+            for gname in self.systemGroupList:
+                print(self._grp2str(self.grpDict[gname]), file=f)
+            print("", file=f)
+
+            print("# device groups", file=f)
+            for gname in self.deviceGroupList:
+                print(self._grp2str(self.grpDict[gname]), file=f)
+            print("", file=f)
+
+            print("# per-user groups", file=f)
+            for gname in self.perUserGroupList:
+                print(self._grp2str(self.grpDict[gname]), file=f)
+            print("", file=f)
+
+            print("# stand-alone groups", file=f)
+            for gname in self.standAloneGroupList:
+                print(self._grp2str(self.grpDict[gname]), file=f)
+            print("", file=f)
+
+            print("# software groups", file=f)
+            for gname in self.softwareGroupList:
+                print(self._grp2str(self.grpDict[gname]), file=f)
+            print("", file=f)
+
+            print("# deprecated", file=f)
+            for gname in self.deprecatedGroupList:
+                print(self._grp2str(self.grpDict[gname]), file=f)
+            print("", file=f)
+
+    def _writeShadow(self):
+        shutil.copy2(self.shadowFile, self.shadowFile + "-")
+        with open(self.shadowFile, "w") as f:
+            for entry in self.shadowDict.values():
+                print(self._sh2str(entry), file=f)
+
+    def _writeGroupShadow(self):
+        shutil.copy2(self.gshadowFile, self.gshadowFile + "-")
+        with open(self.gshadowFile, "w") as f:
+            f.truncate()
+
+    def _pwd2str(self, e):
+        return "%s:%s:%d:%d:%s:%s:%s" % (e.pw_name, "x", e.pw_uid, e.pw_gid, e.pw_gecos, e.pw_dir, e.pw_shell)
+
+    def _grp2str(self, e):
+        return "%s:%s:%d:%s" % (e.gr_name, "x", e.gr_gid, e.gr_mem)
+
+    def _sh2str(self, e):
+        return "%s:%s:::::::" % (e.sh_name, e.sh_encpwd)
 
     def _verifyStage1(self):
         # check system user list
@@ -474,7 +527,7 @@ class PasswdGroupShadow:
                 raise PgsFormatError("No comment is allowed for normal user %s" % (uname))
             if uname not in self.shadowDict:
                 raise PgsFormatError("No shadow entry for normal user %s" % (uname))
-            if len(self.shadowDict[uname].sh_pwd) <= 4:
+            if len(self.shadowDict[uname].sh_encpwd) <= 4:
                 raise PgsFormatError("No password for normal user %s" % (uname))
 
         # check system group list
@@ -542,6 +595,9 @@ class PasswdGroupShadow:
         # check /etc/gshadow
         if len(self._readFile(self.gshadowFile)) > 0:
             raise PgsFormatError("gshadow file should be empty")
+
+    def _fixate(self):
+        pass
 
     def _readFile(self, filename):
         """Read file, returns the whole content"""

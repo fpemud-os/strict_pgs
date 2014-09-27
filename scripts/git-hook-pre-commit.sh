@@ -3,7 +3,7 @@
 FILES="python3/strict_pgs.py"
 ERRFLAG=0
 
-OUTPUT=`pyflakes "${FILES}"`
+OUTPUT=`pyflakes "${FILES}" 2>&1`
 if [ -n "$OUTPUT" ] ; then
     echo "pyflake errors:"
     echo "$OUTPUT"

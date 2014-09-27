@@ -1,7 +1,0 @@
-# system groups
-root:x:0:root
-nobody:x:65534:
-wheel:x:1:
-users:x:2:
-games:x:3:
-
