@@ -19,7 +19,7 @@ if [ -n "$OUTPUT" ] ; then
     ERRFLAG=1
 fi
 
-OUTPUT=`unittest/autotest.py`
+OUTPUT=`unittest/autotest.py 2>&1`
 if [ "$?" == 1 ] ; then
     echo "unittest errors:"
     echo "$OUTPUT"
