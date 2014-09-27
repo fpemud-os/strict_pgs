@@ -5,19 +5,23 @@ import os
 import sys
 import shutil
 import unittest
+
+curDir = os.path.dirname(os.path.abspath(__file__))
 if sys.version_info >= (3, 0):
-	sys.path.insert(0, "../python3")
+	sys.path.insert(0, os.path.join(curDir, "../python3"))
 else:
-	sys.path.insert(0, "../python2")
+	sys.path.insert(0, os.path.join(curDir, "../python2"))
 from strict_pgs import PasswdGroupShadow
 
 class ReadEmptyData(unittest.TestCase):
 	def runTest(self):
-		pgs = PasswdGroupShadow("./empty-data")
+		rootDir = os.path.join(curDir, "empty-data")
+		pgs = PasswdGroupShadow(rootDir)
 
 class ReadFullData(unittest.TestCase):
 	def runTest(self):
-		pgs = PasswdGroupShadow("./full-data")
+		rootDir = os.path.join(curDir, "full-data")
+		pgs = PasswdGroupShadow(rootDir)
 
 def suite():
 	suite = unittest.TestSuite()

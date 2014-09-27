@@ -3,21 +3,33 @@
 FILES="python3/strict_pgs.py"
 ERRFLAG=0
 
-OUTPUT1=`pyflakes "${FILES}"`
-OUTPUT2=`pep8 "${FILES}" | grep -v "E501"`
-
-if [ -n "$OUTPUT1" ] ; then
+OUTPUT=`pyflakes "${FILES}"`
+if [ -n "$OUTPUT" ] ; then
     echo "pyflake errors:"
-    echo "$OUTPUT1"
+    echo "$OUTPUT"
+    echo ""
     ERRFLAG=1
 fi
 
-if [ -n "$OUTPUT2" ] ; then
+OUTPUT=`pep8 "${FILES}" | grep -v "E501"`
+if [ -n "$OUTPUT" ] ; then
     echo "pep8 errors:"
-    echo "$OUTPUT2"
+    echo "$OUTPUT"
+    echo ""
+    ERRFLAG=1
+fi
+
+OUTPUT=`unittest/autotest.py`
+if [ "$?" == 1 ] ; then
+    echo "unittest errors:"
+    echo "$OUTPUT"
+    echo ""
     ERRFLAG=1
 fi
 
 if [ "${ERRFLAG}" == 1 ] ; then
-    exit
+    exit 1
 fi
+
+
+
