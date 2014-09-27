@@ -7,5 +7,10 @@ if [ -e "../.git" ] ; then
     exit 0
 fi
 
-echo "Error: Unknown CVS system!"
+if [ -e "../.svn" ] ; then
+    echo "Error: Unimplemented yet!"
+    exit 1
+fi
+
+echo "Error: No version control system (Git, Subversion) found!"
 exit 1
