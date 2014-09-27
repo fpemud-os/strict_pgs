@@ -37,10 +37,6 @@ import grp
 __author__ = "fpemud@sina.com (Fpemud)"
 __version__ = "0.0.1"
 
-import os
-import pwd
-import grp
-
 class PgsFormatError(Exception):
 	pass
 
@@ -344,7 +340,7 @@ class PasswdGroupShadow:
 		if self.normalUserList != self.perUserGroupList:
 			raise PgsFormatError("Invalid normal user list")
 		for uname in self.normalUserList:
-			if pwd.getpwnam(uname).pw_uid not in range(1000, 10000):
+			if not (1000 < pwd.getpwnam(uname).pw_uid < 10000):
 				raise PgsFormatError("User ID out of range for normal user %s"%(uname))
 			if pwd.getpwnam(uname).pw_uid != grp.getgrnam(uname).gr_gid:
 				raise PgsFormatError("User ID and group ID not equal for normal user %s"%(uname))
@@ -376,7 +372,7 @@ class PasswdGroupShadow:
 		if self.normalGroupList[len(self.normalGroupList) - len(self.perUserGroupList):] != self.perUserGroupList:
 			raise PgsFormatError("Invalid normal group list")
 		for gname in self.normalGroupList:
-			if grp.getgrnam(gname).gr_gid not in range(1000, 10000):
+			if not (1000 < grp.getgrnam(gname).gr_gid < 10000):
 				raise PgsFormatError("Group ID out of range for normal group %s"%(gname))
 
 		# check software group list
@@ -496,5 +492,3 @@ class PasswdGroupShadow:
 		f = open(filename, 'w')
 		f.write(buf)
 		f.close()
-
-
