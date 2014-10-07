@@ -115,8 +115,8 @@ class PasswdGroupShadow:
             else:
                 assert False
 
-	_stdSystemUserList = ["root", "nobody"]
-	_stdSystemGroupList = ["root", "nobody", "wheel", "users", "games"]
+    _stdSystemUserList = ["root", "nobody"]
+    _stdSystemGroupList = ["root", "nobody", "wheel", "users", "games"]
 
     def __init__(self, dirPrefix="/"):
         self.dirPrefix = dirPrefix
@@ -130,7 +130,7 @@ class PasswdGroupShadow:
         self.normalUserList = []
         self.softwareUserList = []
         self.deprecatedUserList = []
-        self.pwdDict = dict()					# key: username; value: _PwdEntry
+        self.pwdDict = dict()                    # key: username; value: _PwdEntry
 
         # filled by _parseGroup
         self.systemGroupList = []
@@ -140,11 +140,11 @@ class PasswdGroupShadow:
         self.softwareGroupList = []
         self.deprecatedGroupList = []
         self.secondaryGroupsDict = dict()       # key: username; value: secondary group list of that user
-        self.grpDict = dict()					# key: groupname; value: _GrpEntry
+        self.grpDict = dict()                    # key: groupname; value: _GrpEntry
 
         # filled by _parseShadow
         self.shadowEntryList = []
-        self.shDict = dict()					# key: username; value: _ShadowEntry
+        self.shDict = dict()                    # key: username; value: _ShadowEntry
 
         # do parsing
         self._parsePasswd()
@@ -511,8 +511,10 @@ class PasswdGroupShadow:
         return "%s:%s:::::::" % (e.sh_name, e.sh_encpwd)
 
     def _verifyStage1(self):
+        """passwd/group/shadow are not recoverable if stage1 verification fails"""
+
         # check system user list
-        if self.systemUserList != self._stdSystemUserList:
+        if set(self.systemUserList) != set(self._stdSystemUserList):
             raise PgsFormatError("Invalid system user list")
         for uname in self.systemUserList:
             if self.pwdDict[uname].pw_gecos != "":
@@ -521,8 +523,6 @@ class PasswdGroupShadow:
                 raise PgsFormatError("No shadow entry for system user %s" % (uname))
 
         # check normal user list
-        if self.normalUserList != self.perUserGroupList:
-            raise PgsFormatError("Invalid normal user list")
         for uname in self.normalUserList:
             if not (1000 <= self.pwdDict[uname].pw_uid < 10000):
                 raise PgsFormatError("User ID out of range for normal user %s" % (uname))
@@ -549,10 +549,16 @@ class PasswdGroupShadow:
                 raise PgsFormatError("Group ID out of range for stand-alone group %s" % (gname))
 
     def _verifyStage2(self):
+        """passwd/group/shadow are recoverable if stage2 verification fails"""
+
+        # check system user list
+        if self.systemUserList != self._stdSystemUserList:
+            raise PgsFormatError("Invalid system user order")
+
         # check normal user list
         uidList = [self.pwdDict[x].pw_uid for x in self.normalUserList]
         if uidList != sorted(uidList):
-            raise PgsFormatError("Invalid normal user sequence")
+            raise PgsFormatError("Invalid normal user order")
 
         # check software user list
         if self.softwareUserList != self.softwareGroupList:
@@ -570,7 +576,7 @@ class PasswdGroupShadow:
         # check stand-alone group list
         gidList = [self.grpDict[x].gr_gid for x in self.standAloneGroupList]
         if gidList != sorted(gidList):
-            raise PgsFormatError("Invalid stand-alone group sequence")
+            raise PgsFormatError("Invalid stand-alone group order")
 
         # check software group list
         for gname in self.softwareGroupList:
@@ -592,7 +598,7 @@ class PasswdGroupShadow:
         i += len(self.systemUserList)
         if self.normalUserList != self.shadowEntryList[i:len(self.normalUserList)]:
             raise PgsFormatError("Invalid shadow file entry order")
-        i += len(self.systemUserList)
+        i += len(self.normalUserList)
         if i != len(self.shadowEntryList):
             raise PgsFormatError("Redundant shadow file entries")
 
@@ -601,27 +607,31 @@ class PasswdGroupShadow:
             raise PgsFormatError("gshadow file should be empty")
 
     def _fixate(self):
-		# sort system user list
-		assert set(self.systemUserList) == set(self._stdSystemUserList)
-		self.systemUserList = self._stdSystemUserList
+        # sort system user list
+        assert set(self.systemUserList) == set(self._stdSystemUserList)
+        self.systemUserList = self._stdSystemUserList
 
-		# sort normal user list
-		self.normalUserList.sort(cmp=lambda x,y: self.pwdDict[x].pw_uid < self.pwdDict[y].pw_uid)
+        # sort normal user list
+        self.normalUserList.sort(key=lambda x: self.pwdDict[x].pw_uid)
 
-		# sort system group list
-		assert set(self.systemGroupList) == set(self._stdSystemGroupList)
-		self.systemGroupList = self._stdSystemGroupList
+        # sort system group list
+        assert set(self.systemGroupList) == set(self._stdSystemGroupList)
+        self.systemGroupList = self._stdSystemGroupList
 
-		# sort per-user group list
-		assert set(self.perUserGroupList) == set(self.normalUserList)
-		self.perUserGroupList = self.normalUserList
+        # sort per-user group list
+        assert set(self.perUserGroupList) == set(self.normalUserList)
+        self.perUserGroupList = self.normalUserList
 
-		# sort stand-alone group list
-		self.standAloneGroupList.sort(cmp=lambda x,y: self.grpDict[x].pw_gid < self.grpDict[y].pw_gid)
+        # sort stand-alone group list
+        self.standAloneGroupList.sort(key=lambda x: self.grpDict[x].pw_gid)
 
-		# sort shadow entry list
-		assert set(self.shadowEntryList) == set(self.systemUserList + self.normalUserList)
-		self.shadowEntryList = self.systemUserList + self.normalUserList
+        # sort shadow entry list
+        assert set(self.shadowEntryList) >= set(self.systemUserList + self.normalUserList)
+        self.shadowEntryList = self.systemUserList + self.normalUserList
+
+        # remove redundant shadow entries
+        for uname in set(self.shDict.keys()) - set(self.shadowEntryList):
+            del self.shDict[uname]
 
     def _readFile(self, filename):
         """Read file, returns the whole content"""
