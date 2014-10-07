@@ -31,7 +31,9 @@ strict_pgs
 """
 
 import os
-import string
+import time
+import fcntl
+import errno
 import shutil
 
 __author__ = "fpemud@sina.com (Fpemud)"
@@ -39,6 +41,10 @@ __version__ = "0.0.1"
 
 
 class PgsFormatError(Exception):
+    pass
+
+
+class PgsLockError(Exception):
     pass
 
 
@@ -118,12 +124,18 @@ class PasswdGroupShadow:
     _stdSystemUserList = ["root", "nobody"]
     _stdSystemGroupList = ["root", "nobody", "wheel", "users", "games"]
 
-    def __init__(self, dirPrefix="/"):
+    def __init__(self, dirPrefix="/", readOnly=True):
+        self.valid = True
         self.dirPrefix = dirPrefix
+        self.readOnly = readOnly
+
         self.passwdFile = os.path.join(dirPrefix, "etc", "passwd")
         self.groupFile = os.path.join(dirPrefix, "etc", "group")
         self.shadowFile = os.path.join(dirPrefix, "etc", "shadow")
         self.gshadowFile = os.path.join(dirPrefix, "etc", "gshadow")
+
+        self.lockFile = os.path.join(dirPrefix, "etc", ".pwd.lock")
+        self.lockFd = None
 
         # filled by _parsePasswd
         self.systemUserList = []
@@ -147,40 +159,55 @@ class PasswdGroupShadow:
         self.shDict = dict()                    # key: username; value: _ShadowEntry
 
         # do parsing
-        self._parsePasswd()
-        self._parseGroup(self.normalUserList)
-        self._parseShadow()
+        self._lockPwd()
+        try:
+            self._parsePasswd()
+            self._parseGroup(self.normalUserList)
+            self._parseShadow()
+        except:
+            self._unlockPwd()
+            raise
+        finally:
+            if self.readOnly:
+                self._unlockPwd()
 
         # do verify
         self._verifyStage1()
 
     def getSystemUserList(self):
         """returns system user name list"""
+        assert self.valid
         return self.systemUserList
 
     def getNormalUserList(self):
         """returns normal user name list"""
+        assert self.valid
         return self.normalUserList
 
     def getSystemGroupList(self):
         """returns system group name list"""
+        assert self.valid
         return self.systemGroupList
 
     def getStandAloneGroupList(self):
         """returns stand-alone group name list"""
+        assert self.valid
         return self.standAloneGroupList
 
     def getSecondaryGroupsOfUser(self, username):
         """returns group name list"""
+        assert self.valid
         assert username in self.normalUserList
         return self.secondaryGroupsDict.get(username, [])
 
     def verify(self):
         """check passwd/group/shadow according to the critiera"""
+        assert self.valid
         self._verifyStage1()
         self._verifyStage2()
 
     def addNormalUser(self, username, password):
+        assert self.valid
         assert username not in self.pwdDict
         assert username not in self.grpDict
 
@@ -214,6 +241,7 @@ class PasswdGroupShadow:
 
     def removeNormalUser(self, username):
         """do nothing if the user doesn't exists"""
+        assert self.valid
 
         self.shadowEntryList.remove(username)
         del self.shDict[username]
@@ -231,9 +259,11 @@ class PasswdGroupShadow:
         del self.pwdDict[username]
 
     def modifyNormalUser(self, username, opName, *kargs):
+        assert self.valid
         assert False
 
     def addStandAloneGroup(self, groupname):
+        assert self.valid
         assert groupname not in self.grpDict
 
         # generate group id
@@ -251,20 +281,33 @@ class PasswdGroupShadow:
         self.standAloneGroupList.append(groupname)
 
     def removeStandAloneGroup(self, groupname):
+        assert self.valid
+
         for glist in self.secondaryGroupsDict.values():
             glist.remove(groupname)
         self.standAloneGroupList.remove(groupname)
         del self.grpDict[groupname]
 
     def modifyStandAloneGroup(self, groupname, opName, *kargs):
+        assert self.valid
         assert False
 
     def save(self):
+        assert self.valid
+        assert not self.readOnly
+
         self._fixate()
         self._writePasswd()
         self._writeGroup()
         self._writeShadow()
         self._writeGroupShadow()
+
+    def close(self):
+        assert self.valid
+
+        if not self.readOnly:
+            self._unlockPwd()
+        self.valid = False
 
     def _parsePasswd(self):
         lineList = self._readFile(self.passwdFile).split("\n")
@@ -511,7 +554,7 @@ class PasswdGroupShadow:
         return "%s:%s:::::::" % (e.sh_name, e.sh_encpwd)
 
     def _verifyStage1(self):
-        """passwd/group/shadow are not recoverable if stage1 verification fails"""
+        """passwd/group/shadow are not fixable if stage1 verification fails"""
 
         # check system user list
         if set(self.systemUserList) != set(self._stdSystemUserList):
@@ -549,7 +592,7 @@ class PasswdGroupShadow:
                 raise PgsFormatError("Group ID out of range for stand-alone group %s" % (gname))
 
     def _verifyStage2(self):
-        """passwd/group/shadow are recoverable if stage2 verification fails"""
+        """passwd/group/shadow are fixable if stage2 verification fails"""
 
         # check system user list
         if self.systemUserList != self._stdSystemUserList:
@@ -644,3 +687,31 @@ class PasswdGroupShadow:
 
         with open(filename, 'w') as f:
             f.write(buf)
+
+    def _lockPwd(self):
+        """Use the same implementation as lckpwdf() in glibc"""
+
+        assert self.lockFd is None
+        self.lockFd = os.open(self.lockFile, os.O_WRONLY | os.O_CREAT | os.O_CLOEXEC, 0o600)
+        try:
+            t = time.clock()
+            while time.clock() - t < 15.0:
+                try:
+                    fcntl.lockf(self.lockFd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    return
+                except IOError as e:
+                    if e.errno != errno.EACCESS and e.errno != errno.EAGAIN:
+                        raise
+                time.sleep(1.0)
+            raise PgsLockException("Failed to acquire lock")
+        except:
+            os.close(self.lockFd)
+            self.lockFd = None
+            raise
+
+    def _unlockPwd(self):
+        """Use the same implementation as ulckpwdf() in glibc"""
+
+        assert self.lockFd is not None
+        os.close(self.lockFd)
+        self.lockFd = None

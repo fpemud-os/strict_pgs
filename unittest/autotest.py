@@ -14,52 +14,75 @@ else:
 from strict_pgs import PasswdGroupShadow
 
 class ReadDataEmpty(unittest.TestCase):
-	def runTest(self):
-		rootDir = os.path.join(curDir, "data-empty")
-		pgs = PasswdGroupShadow(rootDir)
+	def setUp(self):
+		self.rootDir = os.path.join(curDir, "data-empty")
 
-		self.assertEqual(pgs.getSystemUserList(), ["root", "nobody"])
-		self.assertEqual(pgs.getNormalUserList(), [])
-		self.assertEqual(pgs.getSystemGroupList(), ["root", "nobody", "wheel", "users", "games"])
-		self.assertEqual(pgs.getStandAloneGroupList(), [])
+	def runTest(self):
+		pgs = PasswdGroupShadow(self.rootDir)
+		try:
+			self.assertEqual(pgs.getSystemUserList(), ["root", "nobody"])
+			self.assertEqual(pgs.getNormalUserList(), [])
+			self.assertEqual(pgs.getSystemGroupList(), ["root", "nobody", "wheel", "users", "games"])
+			self.assertEqual(pgs.getStandAloneGroupList(), [])
+		finally:
+			pgs.close()
+
+	def tearDown(self):
+		os.unlink(os.path.join(self.rootDir, "etc", ".pwd.lock"))
 
 class ReadDataFull(unittest.TestCase):
+	def setUp(self):
+		self.rootDir = os.path.join(curDir, "data-full")
+
 	def runTest(self):
-		rootDir = os.path.join(curDir, "data-full")
-		pgs = PasswdGroupShadow(rootDir)
+		pgs = PasswdGroupShadow(self.rootDir)
+		try:
+			self.assertEqual(pgs.getSystemUserList(), ["root", "nobody"])
+			self.assertEqual(pgs.getNormalUserList(), ["usera", "userb"])
+			self.assertEqual(pgs.getSystemGroupList(), ["root", "nobody", "wheel", "users", "games"])
+			self.assertEqual(pgs.getStandAloneGroupList(), ["groupa", "groupb", "groupc"])
 
-		self.assertEqual(pgs.getSystemUserList(), ["root", "nobody"])
-		self.assertEqual(pgs.getNormalUserList(), ["usera", "userb"])
-		self.assertEqual(pgs.getSystemGroupList(), ["root", "nobody", "wheel", "users", "games"])
-		self.assertEqual(pgs.getStandAloneGroupList(), ["groupa", "groupb", "groupc"])
+			self.assertEqual(pgs.getSecondaryGroupsOfUser("usera"), ["groupa", "groupb", "groupc"])
+			self.assertEqual(pgs.getSecondaryGroupsOfUser("userb"), [])
+		finally:
+			pgs.close()
 
-		self.assertEqual(pgs.getSecondaryGroupsOfUser("usera"), ["groupa", "groupb", "groupc"])
-		self.assertEqual(pgs.getSecondaryGroupsOfUser("userb"), [])
+	def tearDown(self):
+		os.unlink(os.path.join(self.rootDir, "etc", ".pwd.lock"))
 
 class ReadDataNeedConvert(unittest.TestCase):
+	def setUp(self):
+		self.rootDir = os.path.join(curDir, "data-need-convert")
+
 	def runTest(self):
-		rootDir = os.path.join(curDir, "data-need-convert")
-		pgs = PasswdGroupShadow(rootDir)
+		pgs = PasswdGroupShadow(self.rootDir)
+		try:
+			self.assertEqual(pgs.getSystemUserList(), ["root", "nobody"])
+			self.assertEqual(pgs.getNormalUserList(), ["usera", "userb"])
+			self.assertEqual(pgs.getSystemGroupList(), ["root", "nobody", "wheel", "users", "games"])
+			self.assertEqual(pgs.getStandAloneGroupList(), [])
 
-		self.assertEqual(pgs.getSystemUserList(), ["root", "nobody"])
-		self.assertEqual(pgs.getNormalUserList(), ["usera", "userb"])
-		self.assertEqual(pgs.getSystemGroupList(), ["root", "nobody", "wheel", "users", "games"])
-		self.assertEqual(pgs.getStandAloneGroupList(), [])
+			self.assertEqual(pgs.getSecondaryGroupsOfUser("usera"), ["wheel", "games", "git", "cdrom"])
+			self.assertEqual(pgs.getSecondaryGroupsOfUser("userb"), [])
+		finally:
+			pgs.close()
 
-		self.assertEqual(pgs.getSecondaryGroupsOfUser("usera"), ["wheel", "games", "git", "cdrom"])
-		self.assertEqual(pgs.getSecondaryGroupsOfUser("userb"), [])
+	def tearDown(self):
+		os.unlink(os.path.join(self.rootDir, "etc", ".pwd.lock"))
 
 class ConvertAndSave(unittest.TestCase):
+	def setUp(self):
+		self.srcDir = os.path.join(curDir, "data-need-convert")
+		self.rootDir = os.path.join(curDir, "test")
+		shutil.copytree(self.srcDir, self.rootDir)
+
 	def runTest(self):
-		srcDir = os.path.join(curDir, "data-need-convert")
-		rootDir = os.path.join(curDir, "test")
-		shutil.copytree(srcDir, rootDir)
+		pgs = PasswdGroupShadow(self.rootDir, readOnly=False)
+		pgs.save()
+		pgs.close()
+
+		pgs2 = PasswdGroupShadow(self.rootDir)
 		try:
-			pgs = PasswdGroupShadow(rootDir)
-			pgs.save()
-
-			pgs2 = PasswdGroupShadow(rootDir)
-
 			self.assertEqual(pgs2.getSystemUserList(), ["root", "nobody"])
 			self.assertEqual(pgs2.getNormalUserList(), ["usera", "userb"])
 			self.assertEqual(pgs2.getSystemGroupList(), ["root", "nobody", "wheel", "users", "games"])
@@ -68,7 +91,10 @@ class ConvertAndSave(unittest.TestCase):
 			self.assertEqual(pgs2.getSecondaryGroupsOfUser("usera"), ["wheel", "games", "git", "cdrom"])
 			self.assertEqual(pgs2.getSecondaryGroupsOfUser("userb"), [])
 		finally:
-			shutil.rmtree(rootDir)
+			pgs2.close()
+
+	def tearDown(self):
+		shutil.rmtree(self.rootDir)
 
 class AddOneNormalUser(unittest.TestCase):
 	def setUp(self):
