@@ -33,7 +33,6 @@ strict_pgs
 import os
 import string
 import shutil
-from collections import OrderedDict
 
 __author__ = "fpemud@sina.com (Fpemud)"
 __version__ = "0.0.1"
@@ -116,6 +115,9 @@ class PasswdGroupShadow:
             else:
                 assert False
 
+	_stdSystemUserList = ["root", "nobody"]
+	_stdSystemGroupList = ["root", "nobody", "wheel", "users", "games"]
+
     def __init__(self, dirPrefix="/"):
         self.dirPrefix = dirPrefix
         self.passwdFile = os.path.join(dirPrefix, "etc", "passwd")
@@ -128,7 +130,7 @@ class PasswdGroupShadow:
         self.normalUserList = []
         self.softwareUserList = []
         self.deprecatedUserList = []
-        self.pwdDict = dict()
+        self.pwdDict = dict()					# key: username; value: _PwdEntry
 
         # filled by _parseGroup
         self.systemGroupList = []
@@ -137,11 +139,12 @@ class PasswdGroupShadow:
         self.standAloneGroupList = []
         self.softwareGroupList = []
         self.deprecatedGroupList = []
-        self.secondaryGroupsDict = dict()        # key: username; value: secondary group list of that user
-        self.grpDict = dict()
+        self.secondaryGroupsDict = dict()       # key: username; value: secondary group list of that user
+        self.grpDict = dict()					# key: groupname; value: _GrpEntry
 
         # filled by _parseShadow
-        self.shadowDict = OrderedDict()
+        self.shadowEntryList = []
+        self.shDict = dict()					# key: username; value: _ShadowEntry
 
         # do parsing
         self._parsePasswd()
@@ -206,12 +209,14 @@ class PasswdGroupShadow:
         self.perUserGroupList.append(username)
 
         # add shadow
-        self.shadowDict[username] = self._ShadowEntry(username, newPwd, "", "", "", "", "", "", "")
+        self.shDict[username] = self._ShadowEntry(username, newPwd, "", "", "", "", "", "", "")
+        self.shadowEntryList.append(username)
 
     def removeNormalUser(self, username):
         """do nothing if the user doesn't exists"""
 
-        del self.shadowDict[username]
+        self.shadowEntryList.remove(username)
+        del self.shDict[username]
 
         del self.secondaryGroupsDict[username]
         for gname, entry in self.grpDict.items():
@@ -319,7 +324,7 @@ class PasswdGroupShadow:
 
                 self.pwdDict[t[0]] = self._PwdEntry(t)
 
-                if t[0] in ["root", "nobody"]:
+                if t[0] in self._stdSystemUserList:
                     self.systemUserList.append(t[0])
                 elif 1000 <= int(t[2]) < 10000:
                     self.normalUserList.append(t[0])
@@ -347,14 +352,14 @@ class PasswdGroupShadow:
                 if line == "# system groups":
                     part = "system"
                     continue
-                elif line == "# device groups":
-                    part = "device"
-                    continue
                 elif line == "# per-user groups":
                     part = "per-user"
                     continue
                 elif line == "# stand-alone groups":
                     part = "stand-alone"
+                    continue
+                elif line == "# device groups":
+                    part = "device"
                     continue
                 elif line == "# software groups":
                     part = "software"
@@ -371,12 +376,12 @@ class PasswdGroupShadow:
 
                 if part == "system":
                     self.systemGroupList.append(t[0])
-                elif part == "device":
-                    self.deviceGroupList.append(t[0])
                 elif part == "per-user":
                     self.perUserGroupList.append(t[0])
                 elif part == "stand-alone":
                     self.standAloneGroupList.append(t[0])
+                elif part == "device":
+                    self.deviceGroupList.append(t[0])
                 elif part == "software":
                     self.softwareGroupList.append(t[0])
                 elif part == "deprecated":
@@ -401,7 +406,7 @@ class PasswdGroupShadow:
 
                 self.grpDict[t[0]] = self._GrpEntry(t)
 
-                if t[0] in ["root", "nobody", "wheel", "users", "games"]:
+                if t[0] in self._stdSystemGroupList:
                     self.systemGroupList.append(t[0])
                 elif t[0] in normalUserList:
                     self.perUserGroupList.append(t[0])
@@ -426,7 +431,8 @@ class PasswdGroupShadow:
             if len(t) != 9:
                 raise PgsFormatError("Invalid format of shadow file")
 
-            self.shadowDict[t[0]] = self._ShadowEntry(t)
+            self.shDict[t[0]] = self._ShadowEntry(t)
+            self.shadowEntryList.append(t[0])
 
     def _writePasswd(self):
         shutil.copy2(self.passwdFile, self.passwdFile + "-")
@@ -459,11 +465,6 @@ class PasswdGroupShadow:
                 print(self._grp2str(self.grpDict[gname]), file=f)
             print("", file=f)
 
-            print("# device groups", file=f)
-            for gname in self.deviceGroupList:
-                print(self._grp2str(self.grpDict[gname]), file=f)
-            print("", file=f)
-
             print("# per-user groups", file=f)
             for gname in self.perUserGroupList:
                 print(self._grp2str(self.grpDict[gname]), file=f)
@@ -471,6 +472,11 @@ class PasswdGroupShadow:
 
             print("# stand-alone groups", file=f)
             for gname in self.standAloneGroupList:
+                print(self._grp2str(self.grpDict[gname]), file=f)
+            print("", file=f)
+
+            print("# device groups", file=f)
+            for gname in self.deviceGroupList:
                 print(self._grp2str(self.grpDict[gname]), file=f)
             print("", file=f)
 
@@ -487,8 +493,8 @@ class PasswdGroupShadow:
     def _writeShadow(self):
         shutil.copy2(self.shadowFile, self.shadowFile + "-")
         with open(self.shadowFile, "w") as f:
-            for entry in self.shadowDict.values():
-                print(self._sh2str(entry), file=f)
+            for sname in self.shadowEntryList:
+                print(self._sh2str(self.shDict[sname]), file=f)
 
     def _writeGroupShadow(self):
         shutil.copy2(self.gshadowFile, self.gshadowFile + "-")
@@ -506,12 +512,12 @@ class PasswdGroupShadow:
 
     def _verifyStage1(self):
         # check system user list
-        if self.systemUserList != ["root", "nobody"]:
+        if self.systemUserList != self._stdSystemUserList:
             raise PgsFormatError("Invalid system user list")
         for uname in self.systemUserList:
             if self.pwdDict[uname].pw_gecos != "":
                 raise PgsFormatError("No comment is allowed for system user %s" % (uname))
-            if uname not in self.shadowDict:
+            if uname not in self.shDict:
                 raise PgsFormatError("No shadow entry for system user %s" % (uname))
 
         # check normal user list
@@ -524,13 +530,13 @@ class PasswdGroupShadow:
                 raise PgsFormatError("User ID and group ID not equal for normal user %s" % (uname))
             if self.pwdDict[uname].pw_gecos != "":
                 raise PgsFormatError("No comment is allowed for normal user %s" % (uname))
-            if uname not in self.shadowDict:
+            if uname not in self.shDict:
                 raise PgsFormatError("No shadow entry for normal user %s" % (uname))
-            if len(self.shadowDict[uname].sh_encpwd) <= 4:
+            if len(self.shDict[uname].sh_encpwd) <= 4:
                 raise PgsFormatError("No password for normal user %s" % (uname))
 
         # check system group list
-        if self.systemGroupList != ["root", "nobody", "wheel", "users", "games"]:
+        if self.systemGroupList != self._stdSystemGroupList:
             raise PgsFormatError("Invalid system group list")
 
         # check per-user group list
@@ -558,7 +564,7 @@ class PasswdGroupShadow:
                 raise PgsFormatError("User ID and group ID not equal for software user %s" % (uname))
             if self.pwdDict[uname].pw_shell != "/sbin/nologin":
                 raise PgsFormatError("Invalid shell for software user %s" % (uname))
-            if uname in self.shadowDict:
+            if uname in self.shDict:
                 raise PgsFormatError("Should not have shadow entry for software user %s" % (uname))
 
         # check stand-alone group list
@@ -580,15 +586,14 @@ class PasswdGroupShadow:
                     raise PgsFormatError("User %s is a member of deprecated group %s" % (uname, gname))
 
         # check /etc/shadow
-        shadowEntryList = self.shadowDict.keys()
         i = 0
-        if self.systemUserList != shadowEntryList[i:len(self.systemUserList)]:
+        if self.systemUserList != self.shadowEntryList[i:len(self.systemUserList)]:
             raise PgsFormatError("Invalid shadow file entry order")
         i += len(self.systemUserList)
-        if self.normalUserList != shadowEntryList[i:len(self.normalUserList)]:
+        if self.normalUserList != self.shadowEntryList[i:len(self.normalUserList)]:
             raise PgsFormatError("Invalid shadow file entry order")
         i += len(self.systemUserList)
-        if i != len(shadowEntryList):
+        if i != len(self.shadowEntryList):
             raise PgsFormatError("Redundant shadow file entries")
 
         # check /etc/gshadow
@@ -596,7 +601,27 @@ class PasswdGroupShadow:
             raise PgsFormatError("gshadow file should be empty")
 
     def _fixate(self):
-        pass
+		# sort system user list
+		assert set(self.systemUserList) == set(self._stdSystemUserList)
+		self.systemUserList = self._stdSystemUserList
+
+		# sort normal user list
+		self.normalUserList.sort(cmp=lambda x,y: self.pwdDict[x].pw_uid < self.pwdDict[y].pw_uid)
+
+		# sort system group list
+		assert set(self.systemGroupList) == set(self._stdSystemGroupList)
+		self.systemGroupList = self._stdSystemGroupList
+
+		# sort per-user group list
+		assert set(self.perUserGroupList) == set(self.normalUserList)
+		self.perUserGroupList = self.normalUserList
+
+		# sort stand-alone group list
+		self.standAloneGroupList.sort(cmp=lambda x,y: self.grpDict[x].pw_gid < self.grpDict[y].pw_gid)
+
+		# sort shadow entry list
+		assert set(self.shadowEntryList) == set(self.systemUserList + self.normalUserList)
+		self.shadowEntryList = self.systemUserList + self.normalUserList
 
     def _readFile(self, filename):
         """Read file, returns the whole content"""
