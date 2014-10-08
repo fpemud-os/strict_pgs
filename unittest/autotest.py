@@ -20,6 +20,8 @@ class ReadDataEmpty(unittest.TestCase):
 	def runTest(self):
 		pgs = PasswdGroupShadow(self.rootDir)
 		try:
+			self.assertFalse(os.path.exists(os.path.join(self.rootDir, "etc", ".pwd.lock")))
+
 			self.assertEqual(pgs.getSystemUserList(), ["root", "nobody"])
 			self.assertEqual(pgs.getNormalUserList(), [])
 			self.assertEqual(pgs.getSystemGroupList(), ["root", "nobody", "wheel", "users", "games"])
@@ -28,7 +30,7 @@ class ReadDataEmpty(unittest.TestCase):
 			pgs.close()
 
 	def tearDown(self):
-		os.unlink(os.path.join(self.rootDir, "etc", ".pwd.lock"))
+		pass
 
 class ReadDataFull(unittest.TestCase):
 	def setUp(self):
@@ -37,6 +39,8 @@ class ReadDataFull(unittest.TestCase):
 	def runTest(self):
 		pgs = PasswdGroupShadow(self.rootDir)
 		try:
+			self.assertFalse(os.path.exists(os.path.join(self.rootDir, "etc", ".pwd.lock")))
+
 			self.assertEqual(pgs.getSystemUserList(), ["root", "nobody"])
 			self.assertEqual(pgs.getNormalUserList(), ["usera", "userb"])
 			self.assertEqual(pgs.getSystemGroupList(), ["root", "nobody", "wheel", "users", "games"])
@@ -48,7 +52,7 @@ class ReadDataFull(unittest.TestCase):
 			pgs.close()
 
 	def tearDown(self):
-		os.unlink(os.path.join(self.rootDir, "etc", ".pwd.lock"))
+		pass
 
 class ReadDataNeedConvert(unittest.TestCase):
 	def setUp(self):
@@ -57,6 +61,8 @@ class ReadDataNeedConvert(unittest.TestCase):
 	def runTest(self):
 		pgs = PasswdGroupShadow(self.rootDir)
 		try:
+			self.assertFalse(os.path.exists(os.path.join(self.rootDir, "etc", ".pwd.lock")))
+
 			self.assertEqual(pgs.getSystemUserList(), ["root", "nobody"])
 			self.assertEqual(pgs.getNormalUserList(), ["usera", "userb"])
 			self.assertEqual(pgs.getSystemGroupList(), ["root", "nobody", "wheel", "users", "games"])
@@ -68,7 +74,7 @@ class ReadDataNeedConvert(unittest.TestCase):
 			pgs.close()
 
 	def tearDown(self):
-		os.unlink(os.path.join(self.rootDir, "etc", ".pwd.lock"))
+		pass
 
 class ConvertAndSave(unittest.TestCase):
 	def setUp(self):
@@ -78,8 +84,10 @@ class ConvertAndSave(unittest.TestCase):
 
 	def runTest(self):
 		pgs = PasswdGroupShadow(self.rootDir, readOnly=False)
-		pgs.save()
-		pgs.close()
+		try:
+			self.assertTrue(os.path.exists(os.path.join(self.rootDir, "etc", ".pwd.lock")))
+		finally:
+			pgs.close()
 
 		pgs2 = PasswdGroupShadow(self.rootDir)
 		try:

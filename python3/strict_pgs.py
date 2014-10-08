@@ -159,17 +159,16 @@ class PasswdGroupShadow:
         self.shDict = dict()                    # key: username; value: _ShadowEntry
 
         # do parsing
-        self._lockPwd()
+        if not self.readOnly:
+            self._lockPwd()
         try:
             self._parsePasswd()
             self._parseGroup(self.normalUserList)
             self._parseShadow()
         except:
-            self._unlockPwd()
-            raise
-        finally:
-            if self.readOnly:
+            if not self.readOnly:
                 self._unlockPwd()
+            raise
 
         # do verify
         self._verifyStage1()
@@ -292,20 +291,15 @@ class PasswdGroupShadow:
         assert self.valid
         assert False
 
-    def save(self):
-        assert self.valid
-        assert not self.readOnly
-
-        self._fixate()
-        self._writePasswd()
-        self._writeGroup()
-        self._writeShadow()
-        self._writeGroupShadow()
-
     def close(self):
         assert self.valid
 
         if not self.readOnly:
+            self._fixate()
+            self._writePasswd()
+            self._writeGroup()
+            self._writeShadow()
+            self._writeGroupShadow()
             self._unlockPwd()
         self.valid = False
 
@@ -480,64 +474,75 @@ class PasswdGroupShadow:
     def _writePasswd(self):
         shutil.copy2(self.passwdFile, self.passwdFile + "-")
         with open(self.passwdFile, "w") as f:
-            print("# system users", file=f)
+            f.write("# system users\n")
             for uname in self.systemUserList:
-                print(self._pwd2str(self.pwdDict[uname]), file=f)
-            print("", file=f)
+                f.write(self._pwd2str(self.pwdDict[uname]))
+                f.write("\n")
+            f.write("\n")
 
-            print("# normal users", file=f)
+            f.write("# normal users\n")
             for uname in self.normalUserList:
-                print(self._pwd2str(self.pwdDict[uname]), file=f)
-            print("", file=f)
+                f.write(self._pwd2str(self.pwdDict[uname]))
+                f.write("\n")
+            f.write("\n")
 
-            print("# software users", file=f)
+            f.write("# software users\n")
             for uname in self.softwareUserList:
-                print(self._pwd2str(self.pwdDict[uname]), file=f)
-            print("", file=f)
+                f.write(self._pwd2str(self.pwdDict[uname]))
+                f.write("\n")
+            f.write("\n")
 
-            print("# deprecated", file=f)
+            f.write("# deprecated\n")
             for uname in self.deprecatedUserList:
-                print(self._pwd2str(self.pwdDict[uname]), file=f)
-            print("", file=f)
+                f.write(self._pwd2str(self.pwdDict[uname]))
+                f.write("\n")
+            f.write("\n")
 
     def _writeGroup(self):
         shutil.copy2(self.groupFile, self.groupFile + "-")
         with open(self.groupFile, "w") as f:
-            print("# system groups", file=f)
+            f.write("# system groups\n")
             for gname in self.systemGroupList:
-                print(self._grp2str(self.grpDict[gname]), file=f)
-            print("", file=f)
+                f.write(self._grp2str(self.grpDict[gname]))
+                f.write("\n")
+            f.write("\n")
 
-            print("# per-user groups", file=f)
+            f.write("# per-user groups\n")
             for gname in self.perUserGroupList:
-                print(self._grp2str(self.grpDict[gname]), file=f)
-            print("", file=f)
+                f.write(self._grp2str(self.grpDict[gname]))
+                f.write("\n")
+            f.write("\n")
 
-            print("# stand-alone groups", file=f)
+            f.write("# stand-alone groups\n")
             for gname in self.standAloneGroupList:
-                print(self._grp2str(self.grpDict[gname]), file=f)
-            print("", file=f)
+                f.write(self._grp2str(self.grpDict[gname]))
+                f.write("\n")
+            f.write("\n")
 
-            print("# device groups", file=f)
+            f.write("# device groups\n")
             for gname in self.deviceGroupList:
-                print(self._grp2str(self.grpDict[gname]), file=f)
-            print("", file=f)
+                f.write(self._grp2str(self.grpDict[gname]))
+                f.write("\n")
+            f.write("\n")
 
-            print("# software groups", file=f)
+            f.write("# software groups\n")
             for gname in self.softwareGroupList:
-                print(self._grp2str(self.grpDict[gname]), file=f)
-            print("", file=f)
+                f.write(self._grp2str(self.grpDict[gname]))
+                f.write("\n")
+            f.write("\n")
 
-            print("# deprecated", file=f)
+            f.write("# deprecated\n")
             for gname in self.deprecatedGroupList:
-                print(self._grp2str(self.grpDict[gname]), file=f)
-            print("", file=f)
+                f.write(self._grp2str(self.grpDict[gname]))
+                f.write("\n")
+            f.write("\n")
 
     def _writeShadow(self):
         shutil.copy2(self.shadowFile, self.shadowFile + "-")
         with open(self.shadowFile, "w") as f:
             for sname in self.shadowEntryList:
-                print(self._sh2str(self.shDict[sname]), file=f)
+                f.write(self._sh2str(self.shDict[sname]))
+                f.write("\n")
 
     def _writeGroupShadow(self):
         shutil.copy2(self.gshadowFile, self.gshadowFile + "-")
@@ -703,7 +708,7 @@ class PasswdGroupShadow:
                     if e.errno != errno.EACCESS and e.errno != errno.EAGAIN:
                         raise
                 time.sleep(1.0)
-            raise PgsLockException("Failed to acquire lock")
+            raise PgsLockError("Failed to acquire lock")
         except:
             os.close(self.lockFd)
             self.lockFd = None
