@@ -11,7 +11,7 @@ fi
 
 if [ -e "${ROOTDIR}/.git" ] ; then
     echo "Installing Git hooks..."
-    ln -sf "${ROOTDIR}/scripts/git-hook-pre-commit.sh" "${ROOTDIR}/.git/hooks/pre-commit"
+    ln -sf "../../scripts/git-hook-pre-commit.sh" "${ROOTDIR}/.git/hooks/pre-commit"
     echo "Done."
     exit 0
 fi

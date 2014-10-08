@@ -1,4 +1,4 @@
-!/usr/bin/env python3
+#!/usr/bin/env python3
 
 # strict_pgs.py - strict passwd/group/shadow
 #
