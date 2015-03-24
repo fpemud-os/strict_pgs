@@ -58,9 +58,11 @@ class PgsRemoveUserError(Exception):
 
 
 class PasswdGroupShadow:
+
     """A passwd/group/shadow file with special format and rules"""
 
     class _PwdEntry:
+
         def __init__(self, *kargs):
             if len(kargs) == 1:
                 fields = kargs[0]
@@ -85,6 +87,7 @@ class PasswdGroupShadow:
                 assert False
 
     class _GrpEntry:
+
         def __init__(self, *kargs):
             if len(kargs) == 1:
                 fields = kargs[0]
@@ -103,6 +106,7 @@ class PasswdGroupShadow:
                 assert False
 
     class _ShadowEntry:
+
         def __init__(self, *kargs):
             if len(kargs) == 1:
                 fields = kargs[0]
@@ -210,7 +214,7 @@ class PasswdGroupShadow:
         """returns group name list"""
         assert self.valid
         assert username in self.normalUserList
-        return self.secondaryGroupsDict.get(username, [])
+        return sorted(self.secondaryGroupsDict.get(username, []))
 
     def verify(self):
         """check passwd/group/shadow according to the critiera"""
@@ -318,32 +322,32 @@ class PasswdGroupShadow:
 
     def _parseLoginDef(self):
         if not os.path.exists(self.loginDefFile):
-             raise PgsFormatError("%s is missing" % (self.loginDefFile))
+            raise PgsFormatError("%s is missing" % (self.loginDefFile))
         buf = self._readFile(self.loginDefFile)
 
         m = re.search("\\s*UID_MIN\s+([0-9]+)\\s*$", buf, re.M)
         if m is not None:
-             self.uidMin = int(m.group(1))
+            self.uidMin = int(m.group(1))
         else:
-             raise PgsFormatError("Invalid format of %s, UID_MIN is missing" % (self.loginDefFile))
+            raise PgsFormatError("Invalid format of %s, UID_MIN is missing" % (self.loginDefFile))
 
         m = re.search("\\s*UID_MAX\s+([0-9]+)\\s*$", buf, re.M)
         if m is not None:
-             self.uidMax = int(m.group(1))
+            self.uidMax = int(m.group(1))
         else:
-             raise PgsFormatError("Invalid format of %s, UID_MAX is missing" % (self.loginDefFile))
+            raise PgsFormatError("Invalid format of %s, UID_MAX is missing" % (self.loginDefFile))
 
         m = re.search("\\s*GID_MIN\s+([0-9]+)\\s*$", buf, re.M)
         if m is not None:
-             self.gidMin = int(m.group(1))
+            self.gidMin = int(m.group(1))
         else:
-             raise PgsFormatError("Invalid format of %s, GID_MIN is missing" % (self.loginDefFile))
+            raise PgsFormatError("Invalid format of %s, GID_MIN is missing" % (self.loginDefFile))
 
         m = re.search("\\s*GID_MAX\s+([0-9]+)\\s*$", buf, re.M)
         if m is not None:
-             self.gidMax = int(m.group(1))
+            self.gidMax = int(m.group(1))
         else:
-             raise PgsFormatError("Invalid format of %s, GID_MAX is missing" % (self.loginDefFile))
+            raise PgsFormatError("Invalid format of %s, GID_MAX is missing" % (self.loginDefFile))
 
     def _parsePasswd(self):
         lineList = self._readFile(self.passwdFile).split("\n")

@@ -68,7 +68,7 @@ class ReadDataNeedConvert(unittest.TestCase):
 			self.assertEqual(pgs.getSystemGroupList(), ["root", "nobody", "wheel", "users", "games"])
 			self.assertEqual(pgs.getStandAloneGroupList(), [])
 
-			self.assertEqual(pgs.getSecondaryGroupsOfUser("usera"), ["wheel", "games", "git", "cdrom"])
+			self.assertEqual(pgs.getSecondaryGroupsOfUser("usera"), ["cdrom", "games", "git", "wheel"])
 			self.assertEqual(pgs.getSecondaryGroupsOfUser("userb"), [])
 		finally:
 			pgs.close()
@@ -96,7 +96,7 @@ class ConvertAndSave(unittest.TestCase):
 			self.assertEqual(pgs2.getSystemGroupList(), ["root", "nobody", "wheel", "users", "games"])
 			self.assertEqual(pgs2.getStandAloneGroupList(), [])
 
-			self.assertEqual(pgs2.getSecondaryGroupsOfUser("usera"), ["wheel", "games", "git", "cdrom"])
+			self.assertEqual(pgs2.getSecondaryGroupsOfUser("usera"), ["cdrom", "games", "git", "wheel"])
 			self.assertEqual(pgs2.getSecondaryGroupsOfUser("userb"), [])
 		finally:
 			pgs2.close()
