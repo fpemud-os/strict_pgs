@@ -404,7 +404,7 @@ class PasswdGroupShadow:
 
     def _parseShadow(self):
         for line in self._readFile(self.shadowFile).split("\n"):
-            if line == "":
+            if line == "" or line.startswith("#"):
                 continue
 
             t = line.split(":")
@@ -418,7 +418,6 @@ class PasswdGroupShadow:
         shutil.copy2(self.passwdFile, self.passwdFile + "-")
         with open(self.passwdFile, "w") as f:
             f.write(self._manageFlag + "\n")
-
             for uname in self.systemUserList:
                 f.write(self._pwd2str(self.pwdDict[uname]))
                 f.write("\n")
@@ -439,7 +438,6 @@ class PasswdGroupShadow:
         shutil.copy2(self.groupFile, self.groupFile + "-")
         with open(self.groupFile, "w") as f:
             f.write(self._manageFlag + "\n")
-
             for gname in self.systemGroupList:
                 f.write(self._grp2str(self.grpDict[gname]))
                 f.write("\n")
@@ -467,6 +465,7 @@ class PasswdGroupShadow:
     def _writeShadow(self):
         shutil.copy2(self.shadowFile, self.shadowFile + "-")
         with open(self.shadowFile, "w") as f:
+            f.write(self._manageFlag + "\n")
             for sname in self.shadowEntryList:
                 f.write(self._sh2str(self.shDict[sname]))
                 f.write("\n")
