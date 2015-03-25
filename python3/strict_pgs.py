@@ -152,7 +152,7 @@ class PasswdGroupShadow:
         self.normalUserList = []
         self.softwareUserList = []
         self.deprecatedUserList = []
-        self.pwdDict = dict()                    # key: username; value: _PwdEntry
+        self.pwdDict = dict()                   # key: username; value: _PwdEntry
 
         # filled by _parseGroup
         self.systemGroupList = []
@@ -162,7 +162,7 @@ class PasswdGroupShadow:
         self.softwareGroupList = []
         self.deprecatedGroupList = []
         self.secondaryGroupsDict = dict()       # key: username; value: secondary group list of that user
-        self.grpDict = dict()                    # key: groupname; value: _GrpEntry
+        self.grpDict = dict()                   # key: groupname; value: _GrpEntry
 
         # filled by _parseShadow
         self.shadowEntryList = []
@@ -510,11 +510,11 @@ class PasswdGroupShadow:
                 raise PgsFormatError("No password for normal user %s" % (uname))
 
         # check system group list
-        if self.systemGroupList != self._stdSystemGroupList:
+        if set(self.systemGroupList) != set(self._stdSystemGroupList):
             raise PgsFormatError("Invalid system group list")
 
         # check per-user group list
-        if self.perUserGroupList != self.normalUserList:
+        if set(self.perUserGroupList) != set(self.normalUserList):
             raise PgsFormatError("Invalid per-user group list")
 
         # check stand-alone group list
@@ -535,7 +535,7 @@ class PasswdGroupShadow:
             raise PgsFormatError("Invalid normal user order")
 
         # check software user list
-        if self.softwareUserList != self.softwareGroupList:
+        if set(self.softwareUserList) != set(self.softwareGroupList):
             raise PgsFormatError("Invalid software user list")
         for uname in self.softwareUserList:
             if self.pwdDict[uname].pw_uid >= self.uidMin:
