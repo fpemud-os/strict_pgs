@@ -190,6 +190,12 @@ class PasswdGroupShadow:
         # do verify
         self._verifyStage1()
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, type, value, traceback):
+        self.close()
+
     def getSystemUserList(self):
         """returns system user name list"""
         assert self.valid

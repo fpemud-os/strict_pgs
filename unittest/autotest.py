@@ -18,16 +18,13 @@ class ReadDataEmpty(unittest.TestCase):
 		self.rootDir = os.path.join(curDir, "data-empty")
 
 	def runTest(self):
-		pgs = PasswdGroupShadow(self.rootDir)
-		try:
+		with PasswdGroupShadow(self.rootDir) as pgs:
 			self.assertFalse(os.path.exists(os.path.join(self.rootDir, "etc", ".pwd.lock")))
 
 			self.assertEqual(pgs.getSystemUserList(), ["root", "nobody"])
 			self.assertEqual(pgs.getNormalUserList(), [])
 			self.assertEqual(pgs.getSystemGroupList(), ["root", "nobody", "wheel", "users", "games"])
 			self.assertEqual(pgs.getStandAloneGroupList(), [])
-		finally:
-			pgs.close()
 
 	def tearDown(self):
 		pass
