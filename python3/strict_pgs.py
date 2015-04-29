@@ -128,7 +128,7 @@ class PasswdGroupShadow:
 
     _stdSystemUserList = ["root", "nobody"]
     _stdDeprecatedUserList = ["bin", "daemon", "adm", "shutdown", "halt", "operator", "lp"]
-    _stdSystemGroupList = ["root", "nobody", "wheel", "users", "games"]
+    _stdSystemGroupList = ["root", "nobody", "nogroup", "wheel", "users", "games"]
     _stdDeviceGroupList = ["tty", "disk", "lp", "mem", "kmem", "floppy", "console", "audio", "cdrom", "tape", "video", "cdrw", "usb", "plugdev", "input"]
     _stdDeprecatedGroupList = ["bin", "daemon", "sys", "adm"]
 
@@ -546,13 +546,9 @@ class PasswdGroupShadow:
                 raise PgsFormatError("No comment is allowed for normal user %s" % (uname))
 
         # check software user list
-        if set(self.softwareUserList) != set(self.softwareGroupList):
-            raise PgsFormatError("Invalid software user list")
         for uname in self.softwareUserList:
             if self.pwdDict[uname].pw_uid >= self.uidMin:
                 raise PgsFormatError("User ID out of range for software user %s" % (uname))
-            if self.pwdDict[uname].pw_uid != self.grpDict[uname].gr_gid:
-                raise PgsFormatError("User ID and group ID not equal for software user %s" % (uname))
             if self.pwdDict[uname].pw_shell != "/sbin/nologin":
                 raise PgsFormatError("Invalid shell for software user %s" % (uname))
             if uname in self.shDict:
@@ -578,10 +574,10 @@ class PasswdGroupShadow:
 
         # check /etc/shadow
         i = 0
-        if self.systemUserList != self.shadowEntryList[i:len(self.systemUserList)]:
+        if self.systemUserList != self.shadowEntryList[i:i+len(self.systemUserList)]:
             raise PgsFormatError("Invalid shadow file entry order")
         i += len(self.systemUserList)
-        if self.normalUserList != self.shadowEntryList[i:len(self.normalUserList)]:
+        if self.normalUserList != self.shadowEntryList[i:i+len(self.normalUserList)]:
             raise PgsFormatError("Invalid shadow file entry order")
         i += len(self.normalUserList)
         if i != len(self.shadowEntryList):
