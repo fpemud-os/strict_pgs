@@ -126,17 +126,17 @@ class PasswdGroupShadow:
             else:
                 assert False
 
-    _manageFlag = "# manged by fpemud-usermanager"
     _stdSystemUserList = ["root", "nobody"]
     _stdDeprecatedUserList = ["bin", "daemon", "adm", "shutdown", "halt", "operator", "lp"]
     _stdSystemGroupList = ["root", "nobody", "wheel", "users", "games"]
     _stdDeviceGroupList = ["tty", "disk", "lp", "mem", "kmem", "floppy", "console", "audio", "cdrom", "tape", "video", "cdrw", "usb", "plugdev", "input"]
     _stdDeprecatedGroupList = ["bin", "daemon", "sys", "adm"]
 
-    def __init__(self, dirPrefix="/", readOnly=True):
+    def __init__(self, dirPrefix="/", readOnly=True, msrc="strict_pgs"):
         self.valid = True
         self.dirPrefix = dirPrefix
         self.readOnly = readOnly
+        self.manageFlag = "# manged by %s" % (msrc)
 
         self.loginDefFile = os.path.join(dirPrefix, "etc", "login.defs")
         self.passwdFile = os.path.join(dirPrefix, "etc", "passwd")
@@ -423,7 +423,8 @@ class PasswdGroupShadow:
     def _writePasswd(self):
         shutil.copy2(self.passwdFile, self.passwdFile + "-")
         with open(self.passwdFile, "w") as f:
-            f.write(self._manageFlag + "\n")
+            f.write(self.manageFlag + "\n")
+            f.write("\n")
             for uname in self.systemUserList:
                 f.write(self._pwd2str(self.pwdDict[uname]))
                 f.write("\n")
@@ -443,7 +444,8 @@ class PasswdGroupShadow:
     def _writeGroup(self):
         shutil.copy2(self.groupFile, self.groupFile + "-")
         with open(self.groupFile, "w") as f:
-            f.write(self._manageFlag + "\n")
+            f.write(self.manageFlag + "\n")
+            f.write("\n")
             for gname in self.systemGroupList:
                 f.write(self._grp2str(self.grpDict[gname]))
                 f.write("\n")
@@ -471,7 +473,8 @@ class PasswdGroupShadow:
     def _writeShadow(self):
         shutil.copy2(self.shadowFile, self.shadowFile + "-")
         with open(self.shadowFile, "w") as f:
-            f.write(self._manageFlag + "\n")
+            f.write(self.manageFlag + "\n")
+            f.write("\n")
             for sname in self.shadowEntryList:
                 f.write(self._sh2str(self.shDict[sname]))
                 f.write("\n")
