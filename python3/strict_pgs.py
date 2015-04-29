@@ -497,8 +497,6 @@ class PasswdGroupShadow:
         if set(self.systemUserList) != set(self._stdSystemUserList):
             raise PgsFormatError("Invalid system user list")
         for uname in self.systemUserList:
-            if self.pwdDict[uname].pw_gecos != "":
-                raise PgsFormatError("No comment is allowed for system user %s" % (uname))
             if uname not in self.shDict:
                 raise PgsFormatError("No shadow entry for system user %s" % (uname))
 
@@ -508,12 +506,10 @@ class PasswdGroupShadow:
                 raise PgsFormatError("User ID out of range for normal user %s" % (uname))
             if self.pwdDict[uname].pw_uid != self.grpDict[uname].gr_gid:
                 raise PgsFormatError("User ID and group ID not equal for normal user %s" % (uname))
-            if self.pwdDict[uname].pw_gecos != "":
-                raise PgsFormatError("No comment is allowed for normal user %s" % (uname))
-            if uname not in self.shDict:
-                raise PgsFormatError("No shadow entry for normal user %s" % (uname))
             if len(self.shDict[uname].sh_encpwd) <= 4:
                 raise PgsFormatError("No password for normal user %s" % (uname))
+            if uname not in self.shDict:
+                raise PgsFormatError("No shadow entry for normal user %s" % (uname))
 
         # check system group list
         if set(self.systemGroupList) != set(self._stdSystemGroupList):
@@ -534,11 +530,17 @@ class PasswdGroupShadow:
         # check system user list
         if self.systemUserList != self._stdSystemUserList:
             raise PgsFormatError("Invalid system user order")
+        for uname in self.systemUserList:
+            if self.pwdDict[uname].pw_gecos != "":
+                raise PgsFormatError("No comment is allowed for system user %s" % (uname))
 
         # check normal user list
         uidList = [self.pwdDict[x].pw_uid for x in self.normalUserList]
         if uidList != sorted(uidList):
             raise PgsFormatError("Invalid normal user order")
+        for uname in self.normalUserList:
+            if self.pwdDict[uname].pw_gecos != "":
+                raise PgsFormatError("No comment is allowed for normal user %s" % (uname))
 
         # check software user list
         if set(self.softwareUserList) != set(self.softwareGroupList):
@@ -591,8 +593,25 @@ class PasswdGroupShadow:
         assert set(self.systemUserList) == set(self._stdSystemUserList)
         self.systemUserList = self._stdSystemUserList
 
+        # remove comment for system users
+        for uname in self.systemUserList:
+            self.pwdDict[uname].pw_gecos = ""
+
         # sort normal user list
         self.normalUserList.sort(key=lambda x: self.pwdDict[x].pw_uid)
+
+        # remove comment for normal users
+        for uname in self.normalUserList:
+            self.pwdDict[uname].pw_gecos = ""
+
+        # standardize shell for software users
+        for uname in self.softwareUserList:
+            self.pwdDict[uname].pw_shell = "/sbin/nologin"
+
+        # remove shadow entry for software users
+        for uname in self.softwareUserList:
+            if uname in self.shDict:
+                del self.shDict[uname]
 
         # sort system group list
         assert set(self.systemGroupList) == set(self._stdSystemGroupList)
