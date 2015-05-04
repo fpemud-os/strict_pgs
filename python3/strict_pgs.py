@@ -272,22 +272,26 @@ class PasswdGroupShadow:
         """do nothing if the user doesn't exists"""
         assert self.valid
 
-        self.shadowEntryList.remove(username)
-        del self.shDict[username]
+        if username in self.shadowEntryList:
+            self.shadowEntryList.remove(username)
+            del self.shDict[username]
 
         if username in self.secondaryGroupsDict:
             del self.secondaryGroupsDict[username]
 
         for gname, entry in self.grpDict.items():
             ulist = entry.gr_mem.split(",")
-            ulist.remove(username)
-            self.grpDict[gname].gr_mem = ",".join(ulist)
+            if username in ulist:
+                ulist.remove(username)
+                self.grpDict[gname].gr_mem = ",".join(ulist)
 
-        self.perUserGroupList.remove(username)
-        del self.grpDict[username]
+        if username in self.perUserGroupList:
+            self.perUserGroupList.remove(username)
+            del self.grpDict[username]
 
-        self.normalUserList.remove(username)
-        del self.pwdDict[username]
+        if username in self.normalUserList:
+            self.normalUserList.remove(username)
+            del self.pwdDict[username]
 
     def modifyNormalUser(self, username, op, *kargs):
         assert self.valid
@@ -315,10 +319,12 @@ class PasswdGroupShadow:
             assert len(kargs) == 1
             groupname = kargs[0]
             if username in self.secondaryGroupDict:
-                self.secondaryGroupDict[username].remove(groupname)
+                if groupname in self.secondaryGroupDict[username]:
+                    self.secondaryGroupDict[username].remove(groupname)
             ulist = self.grpDict[groupname].gr_mem.split(",")
-            ulist.remove(username)
-            self.grpDict[groupname].gr_mem = ",".join(ulist)
+            if username in ulist:
+                ulist.remove(username)
+                self.grpDict[groupname].gr_mem = ",".join(ulist)
         else:
             assert False
 
@@ -344,9 +350,12 @@ class PasswdGroupShadow:
         assert self.valid
 
         for glist in self.secondaryGroupsDict.values():
-            glist.remove(groupname)
-        self.standAloneGroupList.remove(groupname)
-        del self.grpDict[groupname]
+            if groupname in glist:
+                glist.remove(groupname)
+
+        if groupname in self.standAloneGroupList:
+            self.standAloneGroupList.remove(groupname)
+            del self.grpDict[groupname]
 
     def close(self):
         assert self.valid
