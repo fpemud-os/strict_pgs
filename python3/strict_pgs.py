@@ -36,6 +36,7 @@ import time
 import fcntl
 import errno
 import shutil
+from passlib import hosts
 
 __author__ = "fpemud@sina.com (Fpemud)"
 __version__ = "0.0.1"
@@ -255,9 +256,6 @@ class PasswdGroupShadow:
                 continue
             break
 
-        # encrypt password
-        newPwd = password
-
         # add user
         self.pwdDict[username] = self._PwdEntry(username, "x", newUid, newUid, "", "/home/%s" % (username), "/bin/bash")
         self.normalUserList.append(username)
@@ -267,7 +265,7 @@ class PasswdGroupShadow:
         self.perUserGroupList.append(username)
 
         # add shadow
-        self.shDict[username] = self._ShadowEntry(username, newPwd, "", "", "", "", "", "", "")
+        self.shDict[username] = self._ShadowEntry(username, hosts.linux_context.encrypt(password), "", "", "", "", "", "", "")
         self.shadowEntryList.append(username)
 
     def removeNormalUser(self, username):
@@ -294,7 +292,9 @@ class PasswdGroupShadow:
         assert username in self.normalUserList
 
         if op == self.UOP_SET_PASSWORD:
-            assert False
+            assert len(kargs) == 1
+            password = kargs[0]
+            self.shDict[username].sh_encpwd = hosts.linux_context.encrypt(password)
         elif op == self.UOP_SET_SHELL:
             assert False
         elif op == self.UOP_JOIN_GROUP:
@@ -339,10 +339,6 @@ class PasswdGroupShadow:
             glist.remove(groupname)
         self.standAloneGroupList.remove(groupname)
         del self.grpDict[groupname]
-
-    def modifyStandAloneGroup(self, groupname, opName, *kargs):
-        assert self.valid
-        assert False
 
     def close(self):
         assert self.valid
