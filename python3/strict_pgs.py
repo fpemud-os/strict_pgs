@@ -53,7 +53,11 @@ class PgsAddUserError(Exception):
     pass
 
 
-class PgsRemoveUserError(Exception):
+class PgsAddGroupError(Exception):
+    pass
+
+
+class PgsAddUserToGroupError(Exception):
     pass
 
 
@@ -131,6 +135,11 @@ class PasswdGroupShadow:
     _stdSystemGroupList = ["root", "nobody", "nogroup", "wheel", "users", "games"]
     _stdDeviceGroupList = ["tty", "disk", "lp", "mem", "kmem", "floppy", "console", "audio", "cdrom", "tape", "video", "cdrw", "usb", "plugdev", "input"]
     _stdDeprecatedGroupList = ["bin", "daemon", "sys", "adm"]
+
+    UOP_SET_PASSWORD = 1
+    UOP_SET_SHELL = 2
+    UOP_JOIN_GROUP = 3
+    UOP_LEAVE_GROUP = 4
 
     def __init__(self, dirPrefix="/", readOnly=True, msrc="strict_pgs"):
         self.valid = True
@@ -280,9 +289,30 @@ class PasswdGroupShadow:
         self.normalUserList.remove(username)
         del self.pwdDict[username]
 
-    def modifyNormalUser(self, username, opName, *kargs):
+    def modifyNormalUser(self, username, op, *kargs):
         assert self.valid
-        assert False
+        assert username in self.normalUserList
+
+        if op == self.UOP_SET_PASSWORD:
+            assert False
+        elif op == self.UOP_SET_SHELL:
+            assert False
+        elif op == self.UOP_JOIN_GROUP:
+            assert len(kargs) == 1
+            groupname = kargs[0]
+            assert groupname in self.systemGroupList + self.deviceGroupList + self.standAlongGroupList + self.softwareGroupList
+            if username not in self.secondaryGroupDict:
+                self.secondaryGroupDict[username] = [groupname]
+            else:
+                if groupname not in self.secondaryGroupDict[username]:
+                    self.secondaryGroupDict[username].append(groupname)
+        elif op == self.UOP_LEAVE_GROUP:
+            assert len(kargs) == 1
+            groupname = kargs[0]
+            if username in self.secondaryGroupDict:
+                self.secondaryGroupDict[username].remove(groupname)
+        else:
+            assert False
 
     def addStandAloneGroup(self, groupname):
         assert self.valid
@@ -292,7 +322,7 @@ class PasswdGroupShadow:
         newGid = 5000
         while True:
             if newGid >= 10000:
-                raise PgsAddUserError("Can not find a valid group id")
+                raise PgsAddGroupError("Can not find a valid group id")
             if newGid in [v.grp_gid for v in self.grpDict.values()]:
                 newGid += 1
                 continue
@@ -574,10 +604,10 @@ class PasswdGroupShadow:
 
         # check /etc/shadow
         i = 0
-        if self.systemUserList != self.shadowEntryList[i:i+len(self.systemUserList)]:
+        if self.systemUserList != self.shadowEntryList[i:i + len(self.systemUserList)]:
             raise PgsFormatError("Invalid shadow file entry order")
         i += len(self.systemUserList)
-        if self.normalUserList != self.shadowEntryList[i:i+len(self.normalUserList)]:
+        if self.normalUserList != self.shadowEntryList[i:i + len(self.normalUserList)]:
             raise PgsFormatError("Invalid shadow file entry order")
         i += len(self.normalUserList)
         if i != len(self.shadowEntryList):
