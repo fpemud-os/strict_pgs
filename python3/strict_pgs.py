@@ -42,6 +42,12 @@ __author__ = "fpemud@sina.com (Fpemud)"
 __version__ = "0.0.1"
 
 
+MUSER_SET_PASSWORD = 1
+MUSER_SET_SHELL = 2
+MUSER_JOIN_GROUP = 3
+MUSER_LEAVE_GROUP = 4
+
+
 class PgsFormatError(Exception):
     pass
 
@@ -136,11 +142,6 @@ class PasswdGroupShadow:
     _stdSystemGroupList = ["root", "nobody", "nogroup", "wheel", "users", "games"]
     _stdDeviceGroupList = ["tty", "disk", "lp", "mem", "kmem", "floppy", "console", "audio", "cdrom", "tape", "video", "cdrw", "usb", "plugdev", "input"]
     _stdDeprecatedGroupList = ["bin", "daemon", "sys", "adm"]
-
-    UOP_SET_PASSWORD = 1
-    UOP_SET_SHELL = 2
-    UOP_JOIN_GROUP = 3
-    UOP_LEAVE_GROUP = 4
 
     def __init__(self, dirPrefix="/", readOnly=True, msrc="strict_pgs"):
         self.valid = True
@@ -297,13 +298,13 @@ class PasswdGroupShadow:
         assert self.valid
         assert username in self.normalUserList
 
-        if op == self.UOP_SET_PASSWORD:
+        if op == MUSER_SET_PASSWORD:
             assert len(kargs) == 1
             password = kargs[0]
             self.shDict[username].sh_encpwd = hosts.linux_context.encrypt(password)
-        elif op == self.UOP_SET_SHELL:
+        elif op == MUSER_SET_SHELL:
             assert False
-        elif op == self.UOP_JOIN_GROUP:
+        elif op == MUSER_JOIN_GROUP:
             assert len(kargs) == 1
             groupname = kargs[0]
             assert groupname in self.systemGroupList + self.deviceGroupList + self.standAlongGroupList + self.softwareGroupList
@@ -315,7 +316,7 @@ class PasswdGroupShadow:
             if username not in ulist:
                 ulist.append(username)
                 self.grpDict[groupname].gr_mem = ",".join(ulist)
-        elif op == self.UOP_LEAVE_GROUP:
+        elif op == MUSER_LEAVE_GROUP:
             assert len(kargs) == 1
             groupname = kargs[0]
             if username in self.secondaryGroupDict:
