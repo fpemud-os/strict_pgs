@@ -275,7 +275,9 @@ class PasswdGroupShadow:
         self.shadowEntryList.remove(username)
         del self.shDict[username]
 
-        del self.secondaryGroupsDict[username]
+        if username in self.secondaryGroupsDict:
+            del self.secondaryGroupsDict[username]
+
         for gname, entry in self.grpDict.items():
             ulist = entry.gr_mem.split(",")
             ulist.remove(username)
@@ -302,15 +304,21 @@ class PasswdGroupShadow:
             groupname = kargs[0]
             assert groupname in self.systemGroupList + self.deviceGroupList + self.standAlongGroupList + self.softwareGroupList
             if username not in self.secondaryGroupDict:
-                self.secondaryGroupDict[username] = [groupname]
-            else:
-                if groupname not in self.secondaryGroupDict[username]:
-                    self.secondaryGroupDict[username].append(groupname)
+                self.secondaryGroupDict[username] = []
+            if groupname not in self.secondaryGroupDict[username]:
+                self.secondaryGroupDict[username].append(groupname)
+            ulist = self.grpDict[groupname].gr_mem.split(",")
+            if username not in ulist:
+                ulist.append(username)
+                self.grpDict[groupname].gr_mem = ",".join(ulist)
         elif op == self.UOP_LEAVE_GROUP:
             assert len(kargs) == 1
             groupname = kargs[0]
             if username in self.secondaryGroupDict:
                 self.secondaryGroupDict[username].remove(groupname)
+            ulist = self.grpDict[groupname].gr_mem.split(",")
+            ulist.remove(username)
+            self.grpDict[groupname].gr_mem = ",".join(ulist)
         else:
             assert False
 
