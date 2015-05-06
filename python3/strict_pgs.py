@@ -281,7 +281,7 @@ class PasswdGroupShadow:
             del self.secondaryGroupsDict[username]
 
         for gname, entry in self.grpDict.items():
-            ulist = entry.gr_mem.split(",")
+            ulist = [x for x in entry.gr_mem.split(",") if x != ""]
             if username in ulist:
                 ulist.remove(username)
                 self.grpDict[gname].gr_mem = ",".join(ulist)
@@ -308,21 +308,21 @@ class PasswdGroupShadow:
             assert len(kargs) == 1
             groupname = kargs[0]
             assert groupname in self.systemGroupList + self.deviceGroupList + self.standAloneGroupList + self.softwareGroupList
-            if username not in self.secondaryGroupDict:
-                self.secondaryGroupDict[username] = []
-            if groupname not in self.secondaryGroupDict[username]:
-                self.secondaryGroupDict[username].append(groupname)
-            ulist = self.grpDict[groupname].gr_mem.split(",")
+            if username not in self.secondaryGroupsDict:
+                self.secondaryGroupsDict[username] = []
+            if groupname not in self.secondaryGroupsDict[username]:
+                self.secondaryGroupsDict[username].append(groupname)
+            ulist = [x for x in self.grpDict[groupname].gr_mem.split(",") if x != ""]
             if username not in ulist:
                 ulist.append(username)
                 self.grpDict[groupname].gr_mem = ",".join(ulist)
         elif op == MUSER_LEAVE_GROUP:
             assert len(kargs) == 1
             groupname = kargs[0]
-            if username in self.secondaryGroupDict:
-                if groupname in self.secondaryGroupDict[username]:
-                    self.secondaryGroupDict[username].remove(groupname)
-            ulist = self.grpDict[groupname].gr_mem.split(",")
+            if username in self.secondaryGroupsDict:
+                if groupname in self.secondaryGroupsDict[username]:
+                    self.secondaryGroupsDict[username].remove(groupname)
+            ulist = [x for x in self.grpDict[groupname].gr_mem.split(",") if x != ""]
             if username in ulist:
                 ulist.remove(username)
                 self.grpDict[groupname].gr_mem = ",".join(ulist)
@@ -616,6 +616,12 @@ class PasswdGroupShadow:
                 if gname in self.deprecatedGroupList:
                     raise PgsFormatError("User %s is a member of deprecated group %s" % (uname, gname))
 
+        # check group member field
+        for gname, g in self.grpDict.items():
+            ulist = [x for x in g.gr_mem.split(",") if x != ""]
+            if g.gr_mem != ",".join(ulist):
+                raise PgsFormatError("Member field of group %s has flaws" % (gname))
+
         # check /etc/shadow
         i = 0
         if self.systemUserList != self.shadowEntryList[i:i + len(self.systemUserList)]:
@@ -667,6 +673,11 @@ class PasswdGroupShadow:
         # sort stand-alone group list
         self.standAloneGroupList.sort(key=lambda x: self.grpDict[x].pw_gid)
 
+        # standardize group members
+        for g in self.grpDict.values():
+            ulist = [x for x in g.gr_mem.split(",") if x != ""]
+            g.gr_mem = ",".join(ulist)
+
         # sort shadow entry list
         assert set(self.shadowEntryList) >= set(self.systemUserList + self.normalUserList)
         self.shadowEntryList = self.systemUserList + self.normalUserList
@@ -674,6 +685,13 @@ class PasswdGroupShadow:
         # remove redundant shadow entries
         for uname in set(self.shDict.keys()) - set(self.shadowEntryList):
             del self.shDict[uname]
+
+    def _nonEmptySplit(theStr, delimiter):
+        ret = []
+        for i in theStr.split(delimiter):
+            if i != "":
+                ret.append(i)
+        return ret
 
     def _readFile(self, filename):
         """Read file, returns the whole content"""
