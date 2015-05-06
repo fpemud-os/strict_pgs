@@ -307,7 +307,7 @@ class PasswdGroupShadow:
         elif op == MUSER_JOIN_GROUP:
             assert len(kargs) == 1
             groupname = kargs[0]
-            assert groupname in self.systemGroupList + self.deviceGroupList + self.standAlongGroupList + self.softwareGroupList
+            assert groupname in self.systemGroupList + self.deviceGroupList + self.standAloneGroupList + self.softwareGroupList
             if username not in self.secondaryGroupDict:
                 self.secondaryGroupDict[username] = []
             if groupname not in self.secondaryGroupDict[username]:
