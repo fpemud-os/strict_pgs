@@ -279,7 +279,6 @@ class PasswdGroupShadow:
 
         if username in self.secondaryGroupsDict:
             del self.secondaryGroupsDict[username]
-
         for gname, entry in self.grpDict.items():
             ulist = [x for x in entry.gr_mem.split(",") if x != ""]
             if username in ulist:
@@ -608,6 +607,10 @@ class PasswdGroupShadow:
             if self.grpDict[gname].gr_gid >= self.gidMin:
                 raise PgsFormatError("Group ID out of range for software group %s" % (gname))
 
+        # check secondary groups for root
+        if "root" in self.secondaryGroupsDict:
+            raise PgsFormatError("User root should not have any secondary group")
+
         # check secondary groups dict
         for uname, grpList in self.secondaryGroupsDict.items():
             if uname not in self.systemUserList + self.normalUserList + self.softwareUserList:
@@ -672,6 +675,15 @@ class PasswdGroupShadow:
 
         # sort stand-alone group list
         self.standAloneGroupList.sort(key=lambda x: self.grpDict[x].pw_gid)
+
+        # remove root from any secondary group
+        if "root" in self.secondaryGroupsDict:
+            del self.secondaryGroupsDict["root"]
+        for entry in self.grpDict.values():
+            ulist = [x for x in entry.gr_mem.split(",") if x != ""]
+            if "root" in ulist:
+                ulist.remove("root")
+                entry.gr_mem = ",".join(ulist)
 
         # standardize group members
         for g in self.grpDict.values():
