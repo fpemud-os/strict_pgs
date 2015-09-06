@@ -140,7 +140,7 @@ class PasswdGroupShadow:
     _stdSystemUserList = ["root", "nobody"]
     _stdDeprecatedUserList = ["bin", "daemon", "adm", "shutdown", "halt", "operator", "lp"]
     _stdSystemGroupList = ["root", "nobody", "nogroup", "wheel", "users", "games"]
-    _stdDeviceGroupList = ["tty", "disk", "lp", "mem", "kmem", "floppy", "console", "audio", "cdrom", "tape", "video", "cdrw", "usb", "plugdev", "input"]
+    _stdDeviceGroupList = ["tty", "disk", "lp", "mem", "kmem", "floppy", "console", "audio", "cdrom", "tape", "video", "cdrw", "usb", "plugdev", "input", "kvm"]
     _stdDeprecatedGroupList = ["bin", "daemon", "sys", "adm"]
 
     def __init__(self, dirPrefix="/", readOnly=True, msrc="strict_pgs"):
