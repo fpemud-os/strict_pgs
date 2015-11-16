@@ -139,7 +139,7 @@ class PasswdGroupShadow:
 
     _stdSystemUserList = ["root", "nobody"]
     _stdDeprecatedUserList = ["bin", "daemon", "adm", "shutdown", "halt", "operator", "lp"]
-    _stdSystemGroupList = ["root", "nobody", "nogroup", "wheel", "users", "games"]
+    _stdSystemGroupList = ["root", "nobody", "nogroup", "wheel", "users"]
     _stdDeviceGroupList = ["tty", "disk", "lp", "mem", "kmem", "floppy", "console", "audio", "cdrom", "tape", "video", "cdrw", "usb", "plugdev", "input"]
     _stdDeprecatedGroupList = ["bin", "daemon", "sys", "adm"]
 
@@ -432,7 +432,7 @@ class PasswdGroupShadow:
 
             self.grpDict[t[0]] = self._GrpEntry(t)
 
-            if t[0] in self._stdSystemGroupList:
+            if t[0] in self._stdSystemGroupList or t[0] in ["games"]:
                 self.systemGroupList.append(t[0])
             elif t[0] in normalUserList:
                 self.perUserGroupList.append(t[0])
@@ -559,7 +559,9 @@ class PasswdGroupShadow:
                 raise PgsFormatError("No shadow entry for normal user %s" % (uname))
 
         # check system group list
-        if set(self.systemGroupList) != set(self._stdSystemGroupList):
+        t = set(self._stdSystemGroupList)
+        t.add("games")
+        if set(self.systemGroupList) != set(self._stdSystemGroupList) and set(self.systemGroupList) != t:
             raise PgsFormatError("Invalid system group list")
 
         # check per-user group list
@@ -663,8 +665,11 @@ class PasswdGroupShadow:
                 del self.shDict[uname]
 
         # sort system group list
-        assert set(self.systemGroupList) == set(self._stdSystemGroupList)
-        self.systemGroupList = self._stdSystemGroupList
+        if "games" in self.systemGroupList:
+            self.systemGroupList = list(self._stdSystemGroupList)
+            self.systemGroupList.append("games")
+        else:
+            self.systemGroupList = self._stdSystemGroupList
 
         # sort per-user group list
         assert set(self.perUserGroupList) == set(self.normalUserList)
