@@ -909,10 +909,11 @@ class PasswdGroupShadow:
         m = self.subUidMin
         for obj in self.subUidDict.values():
             m = max(obj.start + obj.count, m)
-        for uname in set(self.subUidEntryList) - set(self.subUidDict.keys()):
-            assert m < self.subUidMax
-            self.subUidDict[uname] = self._SubUidGidEntry(uname, m, self.subUidCount)
-            m += self.subUidCount
+        for uname in self.subUidEntryList:
+            if uname not in self.subUidDict:
+                assert m < self.subUidMax
+                self.subUidDict[uname] = self._SubUidGidEntry(uname, m, self.subUidCount)
+                m += self.subUidCount
 
         # sort subgid entry list
         self.subGidEntryList = list(self.subUidEntryList)
@@ -925,10 +926,11 @@ class PasswdGroupShadow:
         m = self.subGidMin
         for obj in self.subGidDict.values():
             m = max(obj.start + obj.count, m)
-        for uname in set(self.subGidEntryList) - set(self.subGidDict.keys()):
-            assert m < self.subGidMax
-            self.subGidDict[uname] = self._SubUidGidEntry(uname, m, self.subGidCount)
-            m += self.subGidCount
+        for uname in self.subGidEntryList:
+            if uname not in self.subGidDict:
+                assert m < self.subGidMax
+                self.subGidDict[uname] = self._SubUidGidEntry(uname, m, self.subGidCount)
+                m += self.subGidCount
 
     def _nonEmptySplit(theStr, delimiter):
         ret = []
