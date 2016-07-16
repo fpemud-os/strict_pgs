@@ -307,14 +307,14 @@ class PasswdGroupShadow:
         for obj in self.subUidDict.values():
             m = max(obj.start + obj.count, m)
         self.subUidDict[username] = self._SubUidGidEntry(username, m, self.subUidCount)
-        self.subUidList.append(username)
+        self.subUidEntryList.append(username)
 
         # add subgid
         m = self.subGidMin
         for obj in self.subGidDict.values():
             m = max(obj.start + obj.count, m)
         self.subGidDict[username] = self._SubUidGidEntry(username, m, self.subGidCount)
-        self.subGidList.append(username)
+        self.subGidEntryList.append(username)
 
     def removeNormalUser(self, username):
         """do nothing if the user doesn't exists"""
