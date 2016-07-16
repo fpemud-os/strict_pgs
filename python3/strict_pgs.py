@@ -70,7 +70,15 @@ class PgsAddUserToGroupError(Exception):
 
 class PasswdGroupShadow:
 
-    """A passwd/group/shadow file with special format and rules"""
+    """Unix account files with special format and rules.
+       Including:
+           /etc/passwd
+           /etc/group
+           /etc/shadow
+           /etc/gshadow
+           /etc/subuid
+           /etc/subgid
+    """
 
     class _PwdEntry:
 
@@ -137,6 +145,13 @@ class PasswdGroupShadow:
             else:
                 assert False
 
+    class _SubUidGidEntry:
+
+        def __init__(self, name, start, count):
+            self.name = name
+            self.start = start
+            self.count = count
+
     _stdSystemUserList = ["root", "nobody"]
     _stdDeprecatedUserList = ["bin", "daemon", "adm", "shutdown", "halt", "operator", "lp"]
     _stdSystemGroupList = ["root", "nobody", "nogroup", "wheel", "users"]
@@ -154,9 +169,23 @@ class PasswdGroupShadow:
         self.groupFile = os.path.join(dirPrefix, "etc", "group")
         self.shadowFile = os.path.join(dirPrefix, "etc", "shadow")
         self.gshadowFile = os.path.join(dirPrefix, "etc", "gshadow")
+        self.subuidFile = os.path.join(dirPrefix, "etc", "subuid")
+        self.subgidFile = os.path.join(dirPrefix, "etc", "subgid")
 
         self.lockFile = os.path.join(dirPrefix, "etc", ".pwd.lock")
         self.lockFd = None
+
+        # filled by _parseLoginDef
+        self.uidMin = -1
+        self.uidMax = -1
+        self.gidMin = -1
+        self.gidMax = -1
+        self.subUidMin = -1
+        self.subUidMax = -1
+        self.subUidCount = -1
+        self.subGidMin = -1
+        self.subGidMax = -1
+        self.subGidCount = -1
 
         # filled by _parsePasswd
         self.systemUserList = []
@@ -179,11 +208,13 @@ class PasswdGroupShadow:
         self.shadowEntryList = []
         self.shDict = dict()                    # key: username; value: _ShadowEntry
 
-        # filled by _parseLoginDef
-        self.uidMin = -1
-        self.uidMax = -1
-        self.gidMin = -1
-        self.gidMax = -1
+        # filled by _parseSubUid
+        self.subUidEntryList = []
+        self.subUidDict = dict()                # key: username; value: _SubUidGidEntry
+
+        # filled by _parseSubGid
+        self.subGidEntryList = []
+        self.subGidDict = dict()                # key: username; value: _SubUidGidEntry
 
         # do parsing
         self._parseLoginDef()
@@ -193,6 +224,8 @@ class PasswdGroupShadow:
             self._parsePasswd()
             self._parseGroup(self.normalUserList)
             self._parseShadow()
+            self._parseSubUid()
+            self._parseSubGid()
         except:
             if not self.readOnly:
                 self._unlockPwd()
@@ -234,7 +267,7 @@ class PasswdGroupShadow:
         return sorted(self.secondaryGroupsDict.get(username, []))
 
     def verify(self):
-        """check passwd/group/shadow according to the critiera"""
+        """check account files according to the critiera"""
         assert self.valid
         self._verifyStage1()
         self._verifyStage2()
@@ -269,9 +302,31 @@ class PasswdGroupShadow:
         self.shDict[username] = self._ShadowEntry(username, hosts.linux_context.encrypt(password), "", "", "", "", "", "", "")
         self.shadowEntryList.append(username)
 
+        # add subuid
+        m = self.subUidMin
+        for obj in self.subUidDict.values():
+            m = max(obj.start + obj.count, m)
+        self.subUidDict[username] = self._SubUidGidEntry(username, m, self.subUidCount)
+        self.subUidList.append(username)
+
+        # add subgid
+        m = self.subGidMin
+        for obj in self.subGidDict.values():
+            m = max(obj.start + obj.count, m)
+        self.subGidDict[username] = self._SubUidGidEntry(username, m, self.subGidCount)
+        self.subGidList.append(username)
+
     def removeNormalUser(self, username):
         """do nothing if the user doesn't exists"""
         assert self.valid
+
+        if username in self.subGidEntryList:
+            self.subGidEntryList.remove(username)
+            del self.subGidDict[username]
+
+        if username in self.subUidEntryList:
+            self.subUidEntryList.remove(username)
+            del self.subUidDict[username]
 
         if username in self.shadowEntryList:
             self.shadowEntryList.remove(username)
@@ -366,6 +421,8 @@ class PasswdGroupShadow:
             self._writeGroup()
             self._writeShadow()
             self._writeGroupShadow()
+            self._writeSubUid()
+            self._writeSubGid()
             self._unlockPwd()
         self.valid = False
 
@@ -378,25 +435,77 @@ class PasswdGroupShadow:
         if m is not None:
             self.uidMin = int(m.group(1))
         else:
-            raise PgsFormatError("Invalid format of %s, UID_MIN is missing" % (self.loginDefFile))
+            raise PgsFormatError("Invalid format of %s, UID_MIN is missing." % (self.loginDefFile))
 
         m = re.search("\\s*UID_MAX\s+([0-9]+)\\s*$", buf, re.M)
         if m is not None:
             self.uidMax = int(m.group(1))
         else:
-            raise PgsFormatError("Invalid format of %s, UID_MAX is missing" % (self.loginDefFile))
+            raise PgsFormatError("Invalid format of %s, UID_MAX is missing." % (self.loginDefFile))
 
         m = re.search("\\s*GID_MIN\s+([0-9]+)\\s*$", buf, re.M)
         if m is not None:
             self.gidMin = int(m.group(1))
         else:
-            raise PgsFormatError("Invalid format of %s, GID_MIN is missing" % (self.loginDefFile))
+            raise PgsFormatError("Invalid format of %s, GID_MIN is missing." % (self.loginDefFile))
 
         m = re.search("\\s*GID_MAX\s+([0-9]+)\\s*$", buf, re.M)
         if m is not None:
             self.gidMax = int(m.group(1))
         else:
-            raise PgsFormatError("Invalid format of %s, GID_MAX is missing" % (self.loginDefFile))
+            raise PgsFormatError("Invalid format of %s, GID_MAX is missing." % (self.loginDefFile))
+
+        m = re.search("\\s*SUB_UID_MIN\s+([0-9]+)\\s*$", buf, re.M)
+        if m is not None:
+            self.subUidMin = int(m.group(1))
+        else:
+            raise PgsFormatError("Invalid format of %s, SUB_UID_MIN is missing, shadow version too low?" % (self.loginDefFile))
+
+        m = re.search("\\s*SUB_UID_MAX\s+([0-9]+)\\s*$", buf, re.M)
+        if m is not None:
+            self.subUidMax = int(m.group(1))
+        else:
+            raise PgsFormatError("Invalid format of %s, SUB_UID_MAX is missing, shadow version too low?" % (self.loginDefFile))
+
+        m = re.search("\\s*SUB_UID_COUNT\s+([0-9]+)\\s*$", buf, re.M)
+        if m is not None:
+            self.subUidCount = int(m.group(1))
+        else:
+            raise PgsFormatError("Invalid format of %s, SUB_UID_COUNT is missing, shadow version too low?" % (self.loginDefFile))
+
+        m = re.search("\\s*SUB_GID_MIN\s+([0-9]+)\\s*$", buf, re.M)
+        if m is not None:
+            self.subGidMin = int(m.group(1))
+        else:
+            raise PgsFormatError("Invalid format of %s, SUB_GID_MIN is missing, shadow version too low?" % (self.loginDefFile))
+
+        m = re.search("\\s*SUB_GID_MAX\s+([0-9]+)\\s*$", buf, re.M)
+        if m is not None:
+            self.subGidMax = int(m.group(1))
+        else:
+            raise PgsFormatError("Invalid format of %s, SUB_GID_MAX is missing, shadow version too low?" % (self.loginDefFile))
+
+        m = re.search("\\s*SUB_GID_COUNT\s+([0-9]+)\\s*$", buf, re.M)
+        if m is not None:
+            self.subGidCount = int(m.group(1))
+        else:
+            raise PgsFormatError("Invalid format of %s, SUB_GID_COUNT is missing, shadow version too low?" % (self.loginDefFile))
+
+        if self.uidMax < self.uidMin:
+            raise PgsFormatError("Invalid format of %s, UID_MAX is lesser than UID_MIN." % (self.loginDefFile))
+
+        if self.gidMax < self.gidMin:
+            raise PgsFormatError("Invalid format of %s, GID_MAX is lesser than GID_MIN." % (self.loginDefFile))
+
+        if self.subUidMax < self.subUidMin:
+            raise PgsFormatError("Invalid format of %s, SUB_UID_MAX is lesser than SUB_UID_MIN." % (self.loginDefFile))
+        if (self.subUidMax - self.subUidMin) % self.subUidCount != 0:
+            raise PgsFormatError("Invalid format of %s, SUB_UID_MIN, SUB_UID_MAX and SUB_UID_COUNT is not aligned." % (self.loginDefFile))
+
+        if self.subGidMax < self.subGidMin:
+            raise PgsFormatError("Invalid format of %s, SUB_UID_MAX is lesser than SUB_UID_MIN." % (self.loginDefFile))
+        if (self.subGidMax - self.subGidMin) % self.subGidCount != 0:
+            raise PgsFormatError("Invalid format of %s, SUB_GID_MIN, SUB_GID_MAX and SUB_GID_COUNT is not aligned." % (self.loginDefFile))
 
     def _parsePasswd(self):
         lineList = self._readFile(self.passwdFile).split("\n")
@@ -463,6 +572,36 @@ class PasswdGroupShadow:
             self.shDict[t[0]] = self._ShadowEntry(t)
             self.shadowEntryList.append(t[0])
 
+    def _parseSubUid(self):
+        if not os.path.exists(self.subuidFile):
+            return
+
+        for line in self._readFile(self.subuidFile).split("\n"):
+            if line == "" or line.startswith("#"):
+                continue
+
+            t = line.split(":")
+            if len(t) != 3:
+                raise PgsFormatError("Invalid format of subuid file")
+
+            self.subUidDict[t[0]] = self._SubUidGidEntry(t[0], int(t[1]), int(t[2]))
+            self.subUidEntryList.append(t[0])
+
+    def _parseSubGid(self):
+        if not os.path.exists(self.subgidFile):
+            return
+
+        for line in self._readFile(self.subgidFile).split("\n"):
+            if line == "" or line.startswith("#"):
+                continue
+
+            t = line.split(":")
+            if len(t) != 3:
+                raise PgsFormatError("Invalid format of subgid file")
+
+            self.subGidDict[t[0]] = self._SubUidGidEntry(t[0], int(t[1]), int(t[2]))
+            self.subGidEntryList.append(t[0])
+
     def _writePasswd(self):
         shutil.copy2(self.passwdFile, self.passwdFile + "-")
         with open(self.passwdFile, "w") as f:
@@ -527,6 +666,26 @@ class PasswdGroupShadow:
         with open(self.gshadowFile, "w") as f:
             f.truncate()
 
+    def _writeSubUid(self):
+        if os.path.exists(self.subuidFile):
+            shutil.copy2(self.subuidFile, self.subuidFile + "-")
+        with open(self.subuidFile, "w") as f:
+            f.write(self.manageFlag + "\n")
+            f.write("\n")
+            for name in self.subUidEntryList:
+                f.write(self._subuidgid2str(self.subUidDict[name]))
+                f.write("\n")
+
+    def _writeSubGid(self):
+        if os.path.exists(self.subgidFile):
+            shutil.copy2(self.subgidFile, self.subgidFile + "-")
+        with open(self.subgidFile, "w") as f:
+            f.write(self.manageFlag + "\n")
+            f.write("\n")
+            for name in self.subGidEntryList:
+                f.write(self._subuidgid2str(self.subGidDict[name]))
+                f.write("\n")
+
     def _pwd2str(self, e):
         return "%s:%s:%d:%d:%s:%s:%s" % (e.pw_name, "x", e.pw_uid, e.pw_gid, e.pw_gecos, e.pw_dir, e.pw_shell)
 
@@ -536,8 +695,11 @@ class PasswdGroupShadow:
     def _sh2str(self, e):
         return "%s:%s:::::::" % (e.sh_name, e.sh_encpwd)
 
+    def _subuidgid2str(self, e):
+        return "%s:%d:%d" % (e.name, e.start, e.count)
+
     def _verifyStage1(self):
-        """passwd/group/shadow are not fixable if stage1 verification fails"""
+        """account files are not fixable if stage1 verification fails"""
 
         # check system user list
         if set(self.systemUserList) != set(self._stdSystemUserList):
@@ -573,7 +735,7 @@ class PasswdGroupShadow:
                 raise PgsFormatError("Group ID out of range for stand-alone group %s" % (gname))
 
     def _verifyStage2(self):
-        """passwd/group/shadow are fixable if stage2 verification fails"""
+        """account files are fixable if stage2 verification fails"""
 
         # check system user list
         if self.systemUserList != self._stdSystemUserList:
@@ -642,6 +804,39 @@ class PasswdGroupShadow:
         if len(self._readFile(self.gshadowFile)) > 0:
             raise PgsFormatError("gshadow file should be empty")
 
+        # check subuid entry list
+        i = 0
+        if self.normalUserList != self.subUidEntryList[i:i + len(self.normalUserList)]:
+            raise PgsFormatError("Invalid subuid file entry order")
+        i += len(self.normalUserList)
+        if self.softwareUserList != self.subUidEntryList[i:i + len(self.softwareUserList)]:
+            raise PgsFormatError("Invalid subuid file entry order")
+        i += len(self.softwareUserList)
+        if i != len(self.subUidEntryList):
+            raise PgsFormatError("Redundant subuid file entries")
+
+        # check subuid value range
+        for uname, obj in self.subUidDict.items():
+            if not (self.subUidMin <= obj.start < self.subUidMax):
+                raise PgsFormatError("Subordinate User ID out of range for user %s" % (uname))
+            if (obj.start - self.subUidMin) % self.subUidCount != 0:
+                raise PgsFormatError("Subordinate User ID is not aligned for user %s" % (uname))
+            if obj.count != self.subUidCount:
+                raise PgsFormatError("Subordinate User ID count is different from %s for user %s" % (self.loginDefFile, uname))
+
+        # check subgid entry list
+        if self.subUidEntryList != self.subGidEntryList:
+            raise PgsFormatError("Invalid subgid file entries")
+
+        # check subgid value range
+        for uname, obj in self.subGidDict.items():
+            if not (self.subGidMin <= obj.start < self.subGidMax):
+                raise PgsFormatError("Subordinate Group ID out of range for user %s" % (uname))
+            if (obj.start - self.subGidMin) % self.subGidCount != 0:
+                raise PgsFormatError("Subordinate Group ID is not aligned for user %s" % (uname))
+            if obj.count != self.subGidCount:
+                raise PgsFormatError("Subordinate Group ID count is different from %s for user %s" % (self.loginDefFile, uname))
+
     def _fixate(self):
         # sort system user list
         assert set(self.systemUserList) == set(self._stdSystemUserList)
@@ -703,6 +898,38 @@ class PasswdGroupShadow:
         for uname in set(self.shDict.keys()) - set(self.shadowEntryList):
             del self.shDict[uname]
 
+        # sort subuid entry list
+        self.subUidEntryList = self.normalUserList + self.softwareUserList
+
+        # remove redundant subuid entries
+        for uname in set(self.subUidDict.keys()) - set(self.subUidEntryList):
+            del self.subUidDict[uname]
+
+        # add missing subuid entries
+        m = self.subUidMin
+        for obj in self.subUidDict.values():
+            m = max(obj.start + obj.count, m)
+        for uname in set(self.subUidEntryList) - set(self.subUidDict.keys()):
+            assert m < self.subUidMax
+            self.subUidDict[uname] = self._SubUidGidEntry(uname, m, self.subUidCount)
+            m += self.subUidCount
+
+        # sort subgid entry list
+        self.subGidEntryList = list(self.subUidEntryList)
+
+        # remove redundant subgid entries
+        for uname in set(self.subGidDict.keys()) - set(self.subGidEntryList):
+            del self.subGidDict[uname]
+
+        # add missing subgid entries
+        m = self.subGidMin
+        for obj in self.subGidDict.values():
+            m = max(obj.start + obj.count, m)
+        for uname in set(self.subGidEntryList) - set(self.subGidDict.keys()):
+            assert m < self.subGidMax
+            self.subGidDict[uname] = self._SubUidGidEntry(uname, m, self.subGidCount)
+            m += self.subGidCount
+
     def _nonEmptySplit(theStr, delimiter):
         ret = []
         for i in theStr.split(delimiter):
@@ -715,12 +942,6 @@ class PasswdGroupShadow:
 
         with open(filename, 'r') as f:
             return f.read()
-
-    def _writeFile(self, filename, buf):
-        """Write buffer to file"""
-
-        with open(filename, 'w') as f:
-            f.write(buf)
 
     def _lockPwd(self):
         """Use the same implementation as lckpwdf() in glibc"""
