@@ -4,7 +4,6 @@ nobody:x:65534:
 nogroup:x:65533:
 wheel:x:1:
 users:x:2:
-games:x:3:
 
 # device groups
 

@@ -23,7 +23,7 @@ class ReadDataEmpty(unittest.TestCase):
 
 			self.assertEqual(pgs.getSystemUserList(), ["root", "nobody"])
 			self.assertEqual(pgs.getNormalUserList(), [])
-			self.assertEqual(pgs.getSystemGroupList(), ["root", "nobody", "nogroup", "wheel", "users", "games"])
+			self.assertEqual(pgs.getSystemGroupList(), ["root", "nobody", "nogroup", "wheel", "users"])
 			self.assertEqual(pgs.getStandAloneGroupList(), [])
 
 	def tearDown(self):
@@ -40,7 +40,7 @@ class ReadDataFull(unittest.TestCase):
 
 			self.assertEqual(pgs.getSystemUserList(), ["root", "nobody"])
 			self.assertEqual(pgs.getNormalUserList(), ["usera", "userb"])
-			self.assertEqual(pgs.getSystemGroupList(), ["root", "nobody", "nogroup", "wheel", "users", "games"])
+			self.assertEqual(pgs.getSystemGroupList(), ["root", "nobody", "nogroup", "wheel", "users"])
 			self.assertEqual(pgs.getStandAloneGroupList(), ["groupa", "groupb", "groupc"])
 
 			self.assertEqual(pgs.getSecondaryGroupsOfUser("usera"), ["groupa", "groupb", "groupc"])
@@ -62,7 +62,7 @@ class ReadDataNeedConvert(unittest.TestCase):
 
 			self.assertEqual(pgs.getSystemUserList(), ["root", "nobody"])
 			self.assertEqual(pgs.getNormalUserList(), ["usera", "userb"])
-			self.assertEqual(pgs.getSystemGroupList(), ["root", "nobody", "nogroup", "wheel", "users", "games"])
+			self.assertEqual(pgs.getSystemGroupList(), ["root", "nobody", "nogroup", "wheel", "users"])
 			self.assertEqual(pgs.getStandAloneGroupList(), [])
 
 			self.assertEqual(pgs.getSecondaryGroupsOfUser("usera"), ["cdrom", "games", "git", "wheel"])
@@ -90,7 +90,7 @@ class ConvertAndSave(unittest.TestCase):
 		try:
 			self.assertEqual(pgs2.getSystemUserList(), ["root", "nobody"])
 			self.assertEqual(pgs2.getNormalUserList(), ["usera", "userb"])
-			self.assertEqual(pgs2.getSystemGroupList(), ["root", "nobody", "nogroup", "wheel", "users", "games"])
+			self.assertEqual(pgs2.getSystemGroupList(), ["root", "nobody", "nogroup", "wheel", "users"])
 			self.assertEqual(pgs2.getStandAloneGroupList(), [])
 
 			self.assertEqual(pgs2.getSecondaryGroupsOfUser("usera"), ["cdrom", "games", "git", "wheel"])

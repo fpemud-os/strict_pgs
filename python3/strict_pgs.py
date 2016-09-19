@@ -540,7 +540,7 @@ class PasswdGroupShadow:
 
             self.grpDict[t[0]] = self._GrpEntry(t)
 
-            if t[0] in self._stdSystemGroupList or t[0] in ["games"]:
+            if t[0] in self._stdSystemGroupList:
                 self.systemGroupList.append(t[0])
             elif t[0] in normalUserList:
                 self.perUserGroupList.append(t[0])
@@ -720,9 +720,7 @@ class PasswdGroupShadow:
                 raise PgsFormatError("No shadow entry for normal user %s" % (uname))
 
         # check system group list
-        t = set(self._stdSystemGroupList)
-        t.add("games")
-        if set(self.systemGroupList) != set(self._stdSystemGroupList) and set(self.systemGroupList) != t:
+        if set(self.systemGroupList) != set(self._stdSystemGroupList):
             raise PgsFormatError("Invalid system group list")
 
         # check per-user group list
@@ -863,11 +861,8 @@ class PasswdGroupShadow:
                 del self.shDict[uname]
 
         # sort system group list
-        if "games" in self.systemGroupList:
-            self.systemGroupList = list(self._stdSystemGroupList)
-            self.systemGroupList.append("games")
-        else:
-            self.systemGroupList = self._stdSystemGroupList
+        assert set(self.systemGroupList) == set(self._stdSystemGroupList)
+        self.systemGroupList = self._stdSystemGroupList
 
         # sort per-user group list
         assert set(self.perUserGroupList) == set(self.normalUserList)
