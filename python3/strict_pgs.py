@@ -260,6 +260,11 @@ class PasswdGroupShadow:
         assert self.valid
         return self.standAloneGroupList
 
+    def getSoftwareGroupList(self):
+        """returns software group name list"""
+        assert self.valid
+        return self.softwareGroupList
+
     def getSecondaryGroupsOfUser(self, username):
         """returns group name list"""
         assert self.valid
