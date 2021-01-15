@@ -9,11 +9,6 @@ except:
     # Fall back if setuptools is not installed.
     from distutils.core import setup
 
-# check Python's version
-if sys.version_info < (3, 2):
-    sys.stderr.write('This module requires at least Python 3.2\n')
-    sys.exit(1)
-
 # check linux platform
 platform = distutils.util.get_platform()
 if not platform.startswith('linux'):
@@ -28,9 +23,7 @@ classif = [
     'Natural Language :: English',
     'Operating System :: POSIX :: Linux',
     'Programming Language :: Python',
-    'Programming Language :: Python :: 3.3',
-    'Programming Language :: Python :: 3.4',
-    'Programming Language :: Python :: 3.5',
+    'Programming Language :: Python :: 3',
     'Topic :: Software Development :: Libraries :: Python Modules',
 ]
 
