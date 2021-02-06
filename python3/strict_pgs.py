@@ -37,6 +37,7 @@ import fcntl
 import errno
 import shutil
 from passlib import hosts
+from datetime import datetime
 
 __author__ = "fpemud@sina.com (Fpemud)"
 __version__ = "0.0.1"
@@ -226,7 +227,7 @@ class PasswdGroupShadow:
             self._parseShadow()
             self._parseSubUid()
             self._parseSubGid()
-        except:
+        except Exception:
             if not self.readOnly:
                 self._unlockPwd()
             raise
@@ -436,61 +437,61 @@ class PasswdGroupShadow:
             raise PgsFormatError("%s is missing" % (self.loginDefFile))
         buf = self._readFile(self.loginDefFile)
 
-        m = re.search("\\s*UID_MIN\s+([0-9]+)\\s*$", buf, re.M)
+        m = re.search(r'\s*UID_MIN\s+([0-9]+)\s*$', buf, re.M)
         if m is not None:
             self.uidMin = int(m.group(1))
         else:
             raise PgsFormatError("Invalid format of %s, UID_MIN is missing." % (self.loginDefFile))
 
-        m = re.search("\\s*UID_MAX\s+([0-9]+)\\s*$", buf, re.M)
+        m = re.search(r'\s*UID_MAX\s+([0-9]+)\s*$', buf, re.M)
         if m is not None:
             self.uidMax = int(m.group(1))
         else:
             raise PgsFormatError("Invalid format of %s, UID_MAX is missing." % (self.loginDefFile))
 
-        m = re.search("\\s*GID_MIN\s+([0-9]+)\\s*$", buf, re.M)
+        m = re.search(r'\s*GID_MIN\s+([0-9]+)\s*$', buf, re.M)
         if m is not None:
             self.gidMin = int(m.group(1))
         else:
             raise PgsFormatError("Invalid format of %s, GID_MIN is missing." % (self.loginDefFile))
 
-        m = re.search("\\s*GID_MAX\s+([0-9]+)\\s*$", buf, re.M)
+        m = re.search(r'\s*GID_MAX\s+([0-9]+)\s*$', buf, re.M)
         if m is not None:
             self.gidMax = int(m.group(1))
         else:
             raise PgsFormatError("Invalid format of %s, GID_MAX is missing." % (self.loginDefFile))
 
-        m = re.search("\\s*SUB_UID_MIN\s+([0-9]+)\\s*$", buf, re.M)
+        m = re.search(r'\s*SUB_UID_MIN\s+([0-9]+)\s*$', buf, re.M)
         if m is not None:
             self.subUidMin = int(m.group(1))
         else:
             raise PgsFormatError("Invalid format of %s, SUB_UID_MIN is missing, shadow version too low?" % (self.loginDefFile))
 
-        m = re.search("\\s*SUB_UID_MAX\s+([0-9]+)\\s*$", buf, re.M)
+        m = re.search(r'\s*SUB_UID_MAX\s+([0-9]+)\s*$', buf, re.M)
         if m is not None:
             self.subUidMax = int(m.group(1))
         else:
             raise PgsFormatError("Invalid format of %s, SUB_UID_MAX is missing, shadow version too low?" % (self.loginDefFile))
 
-        m = re.search("\\s*SUB_UID_COUNT\s+([0-9]+)\\s*$", buf, re.M)
+        m = re.search(r'\s*SUB_UID_COUNT\s+([0-9]+)\s*$', buf, re.M)
         if m is not None:
             self.subUidCount = int(m.group(1))
         else:
             raise PgsFormatError("Invalid format of %s, SUB_UID_COUNT is missing, shadow version too low?" % (self.loginDefFile))
 
-        m = re.search("\\s*SUB_GID_MIN\s+([0-9]+)\\s*$", buf, re.M)
+        m = re.search(r'\s*SUB_GID_MIN\s+([0-9]+)\s*$', buf, re.M)
         if m is not None:
             self.subGidMin = int(m.group(1))
         else:
             raise PgsFormatError("Invalid format of %s, SUB_GID_MIN is missing, shadow version too low?" % (self.loginDefFile))
 
-        m = re.search("\\s*SUB_GID_MAX\s+([0-9]+)\\s*$", buf, re.M)
+        m = re.search(r'\s*SUB_GID_MAX\s+([0-9]+)\s*$', buf, re.M)
         if m is not None:
             self.subGidMax = int(m.group(1))
         else:
             raise PgsFormatError("Invalid format of %s, SUB_GID_MAX is missing, shadow version too low?" % (self.loginDefFile))
 
-        m = re.search("\\s*SUB_GID_COUNT\s+([0-9]+)\\s*$", buf, re.M)
+        m = re.search(r'\s*SUB_GID_COUNT\s+([0-9]+)\s*$', buf, re.M)
         if m is not None:
             self.subGidCount = int(m.group(1))
         else:
@@ -951,8 +952,8 @@ class PasswdGroupShadow:
         assert self.lockFd is None
         self.lockFd = os.open(self.lockFile, os.O_WRONLY | os.O_CREAT | os.O_CLOEXEC, 0o600)
         try:
-            t = time.clock()
-            while time.clock() - t < 15.0:
+            t = datetime.now()
+            while (datetime.now() - t).total_seconds() < 15.0:
                 try:
                     fcntl.lockf(self.lockFd, fcntl.LOCK_EX | fcntl.LOCK_NB)
                     return
@@ -961,7 +962,7 @@ class PasswdGroupShadow:
                         raise
                 time.sleep(1.0)
             raise PgsLockError("Failed to acquire lock")
-        except:
+        except Exception:
             os.close(self.lockFd)
             self.lockFd = None
             raise
