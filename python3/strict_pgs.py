@@ -36,6 +36,7 @@ import time
 import fcntl
 import errno
 import shutil
+import pathlib
 from passlib import hosts
 from datetime import datetime
 
@@ -435,7 +436,7 @@ class PasswdGroupShadow:
     def _parseLoginDef(self):
         if not os.path.exists(self.loginDefFile):
             raise PgsFormatError("%s is missing" % (self.loginDefFile))
-        buf = self._readFile(self.loginDefFile)
+        buf = pathlib.Path(self.loginDefFile).read_text()
 
         m = re.search(r'\s*UID_MIN\s+([0-9]+)\s*$', buf, re.M)
         if m is not None:
@@ -514,7 +515,7 @@ class PasswdGroupShadow:
             raise PgsFormatError("Invalid format of %s, SUB_GID_MIN, SUB_GID_MAX and SUB_GID_COUNT is not aligned." % (self.loginDefFile))
 
     def _parsePasswd(self):
-        lineList = self._readFile(self.passwdFile).split("\n")
+        lineList = pathlib.Path(self.passwdFile).read_text().split("\n")
         for line in lineList:
             if line == "" or line.startswith("#"):
                 continue
@@ -535,7 +536,7 @@ class PasswdGroupShadow:
                 self.softwareUserList.append(t[0])
 
     def _parseGroup(self, normalUserList):
-        lineList = self._readFile(self.groupFile).split("\n")
+        lineList = pathlib.Path(self.groupFile).read_text().split("\n")
         for line in lineList:
             if line == "" or line.startswith("#"):
                 continue
@@ -567,7 +568,10 @@ class PasswdGroupShadow:
                 self.secondaryGroupsDict[u].append(t[0])
 
     def _parseShadow(self):
-        for line in self._readFile(self.shadowFile).split("\n"):
+        if not os.path.exists(self.shadowFile):
+            return
+
+        for line in pathlib.Path(self.shadowFile).read_text().split("\n"):
             if line == "" or line.startswith("#"):
                 continue
 
@@ -582,7 +586,7 @@ class PasswdGroupShadow:
         if not os.path.exists(self.subuidFile):
             return
 
-        for line in self._readFile(self.subuidFile).split("\n"):
+        for line in pathlib.Path(self.subuidFile).read_text().split("\n"):
             if line == "" or line.startswith("#"):
                 continue
 
@@ -597,7 +601,7 @@ class PasswdGroupShadow:
         if not os.path.exists(self.subgidFile):
             return
 
-        for line in self._readFile(self.subgidFile).split("\n"):
+        for line in pathlib.Path(self.subgidFile).read_text().split("\n"):
             if line == "" or line.startswith("#"):
                 continue
 
@@ -659,7 +663,8 @@ class PasswdGroupShadow:
                 f.write("\n")
 
     def _writeShadow(self):
-        shutil.copy2(self.shadowFile, self.shadowFile + "-")
+        if os.path.exists(self.shadowFile):
+            shutil.copy2(self.shadowFile, self.shadowFile + "-")
         with open(self.shadowFile, "w") as f:
             f.write(self.manageFlag + "\n")
             f.write("\n")
@@ -668,7 +673,8 @@ class PasswdGroupShadow:
                 f.write("\n")
 
     def _writeGroupShadow(self):
-        shutil.copy2(self.gshadowFile, self.gshadowFile + "-")
+        if os.path.exists(self.gshadowFile):
+            shutil.copy2(self.gshadowFile, self.gshadowFile + "-")
         with open(self.gshadowFile, "w") as f:
             f.truncate()
 
@@ -805,7 +811,9 @@ class PasswdGroupShadow:
             raise PgsFormatError("Redundant shadow file entries")
 
         # check /etc/gshadow
-        if len(self._readFile(self.gshadowFile)) > 0:
+        if not os.path.exists(self.gshadowFile):
+            raise PgsFormatError("gshadow file does not exist")
+        if len(pathlib.Path(self.gshadowFile).read_text()) > 0:
             raise PgsFormatError("gshadow file should be empty")
 
         # check subuid entry list
@@ -939,12 +947,6 @@ class PasswdGroupShadow:
             if i != "":
                 ret.append(i)
         return ret
-
-    def _readFile(self, filename):
-        """Read file, returns the whole content"""
-
-        with open(filename, 'r') as f:
-            return f.read()
 
     def _lockPwd(self):
         """Use the same implementation as lckpwdf() in glibc"""
