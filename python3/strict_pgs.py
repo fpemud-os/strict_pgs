@@ -278,6 +278,7 @@ class PasswdGroupShadow:
         assert self.valid
         self._verifyStage1()
         self._verifyStage2()
+        self._verifyStage3()
 
     def addNormalUser(self, username, password):
         assert self.valid
@@ -711,7 +712,7 @@ class PasswdGroupShadow:
         return "%s:%d:%d" % (e.name, e.start, e.count)
 
     def _verifyStage1(self):
-        """account files are not fixable if stage1 verification fails"""
+        """account files are not fixable, and strict_pgs is not usable if stage1 verification fails"""
 
         # check system user list
         if set(self.systemUserList) != set(self._stdSystemUserList):
@@ -745,7 +746,13 @@ class PasswdGroupShadow:
                 raise PgsFormatError("Group ID out of range for stand-alone group %s" % (gname))
 
     def _verifyStage2(self):
-        """account files are fixable if stage2 verification fails"""
+        """account files are not fixable, but strict_pgs is usable if stage2 verification fails"""
+
+        if len(self.shDict["root"].sh_encpwd) <= 4 and len(self.normalUserList) == 0:
+            raise PgsFormatError("Not any user can login")
+
+    def _verifyStage3(self):
+        """account files are fixable if stage3 verification fails"""
 
         # check system user list
         if self.systemUserList != self._stdSystemUserList:
