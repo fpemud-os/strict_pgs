@@ -928,6 +928,9 @@ class PasswdGroupShadow:
                 for s in range(self.subUidMin, self.subUidMax, self.subUidCount):
                     if s not in slist:
                         self.subUidDict[uname] = self._SubUidGidEntry(uname, s, self.subUidCount)
+                        break
+                else:
+                    assert False
 
         # sort subgid entry list
         self.subGidEntryList = list(self.subUidEntryList)
@@ -943,6 +946,9 @@ class PasswdGroupShadow:
                 for s in range(self.subGidMin, self.subGidMax, self.subGidCount):
                     if s not in slist:
                         self.subGidDict[uname] = self._SubUidGidEntry(uname, s, self.subGidCount)
+                        break
+                else:
+                    assert False
 
     def _nonEmptySplit(theStr, delimiter):
         ret = []
