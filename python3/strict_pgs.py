@@ -921,15 +921,13 @@ class PasswdGroupShadow:
         for uname in set(self.subUidDict.keys()) - set(self.subUidEntryList):
             del self.subUidDict[uname]
 
-        # add missing subuid entries
-        m = self.subUidMin
-        for obj in self.subUidDict.values():
-            m = max(obj.start + obj.count, m)
+        # add missing subuid entries, fix invalid subuid entries
         for uname in self.subUidEntryList:
-            if uname not in self.subUidDict:
-                assert m < self.subUidMax
-                self.subUidDict[uname] = self._SubUidGidEntry(uname, m, self.subUidCount)
-                m += self.subUidCount
+            if uname not in self.subUidDict or not (self.subUidMin <= self.subUidDict[uname].start < self.subUidMax) or (self.subUidDict[uname].start - self.subUidMin) % self.subUidCount != 0 or self.subUidDict[uname].count != self.subUidCount:
+                slist = [x.start for x in self.subUidDict.values()]
+                for s in range(self.subUidMin, self.subUidMax, self.subUidCount):
+                    if s not in slist:
+                        self.subUidDict[uname] = self._SubUidGidEntry(uname, s, self.subUidCount)
 
         # sort subgid entry list
         self.subGidEntryList = list(self.subUidEntryList)
@@ -938,15 +936,13 @@ class PasswdGroupShadow:
         for uname in set(self.subGidDict.keys()) - set(self.subGidEntryList):
             del self.subGidDict[uname]
 
-        # add missing subgid entries
-        m = self.subGidMin
-        for obj in self.subGidDict.values():
-            m = max(obj.start + obj.count, m)
+        # add missing subgid entries, fix invalid subgid entries
         for uname in self.subGidEntryList:
-            if uname not in self.subGidDict:
-                assert m < self.subGidMax
-                self.subGidDict[uname] = self._SubUidGidEntry(uname, m, self.subGidCount)
-                m += self.subGidCount
+            if uname not in self.subGidDict or not (self.subGidMin <= self.subGidDict[uname].start < self.subGidMax) or (self.subGidDict[uname].start - self.subGidMin) % self.subGidCount != 0 or self.subGidDict[uname].count != self.subGidCount:
+                slist = [x.start for x in self.subGidDict.values()]
+                for s in range(self.subGidMin, self.subGidMax, self.subGidCount):
+                    if s not in slist:
+                        self.subGidDict[uname] = self._SubUidGidEntry(uname, s, self.subGidCount)
 
     def _nonEmptySplit(theStr, delimiter):
         ret = []
